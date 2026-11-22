@@ -11,9 +11,12 @@ export function StatsOverlay() {
     const id = setInterval(() => {
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
       const s = engine.stats;
+      const p = engine.mediaPool?.stats;
       if (ref.current)
         ref.current.textContent =
           `${engine.clock.playing ? s.fps.toFixed(0) + ' fps' : 'idle'} · draw ${s.renderMs.toFixed(1)} ms` +
+          (p ? ` · drift ${p.leadDriftMs} ms · resync ${p.playSeeks} · wait ${p.holdFrames}` : '') +
+          ` · ${useUIStore.getState().renderer}` +
           (mem ? ` · heap ${(mem.usedJSHeapSize / 1048576).toFixed(0)} MB` : '');
     }, 500);
     return () => clearInterval(id);

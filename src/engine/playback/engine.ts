@@ -130,6 +130,7 @@ class PlaybackEngine {
     if (this.pool && (playing || changed || this.dirty || this.pool.busy)) {
       const r = this.pool.sync(project, assets, t, playing);
       this.clock.hold(r.stalled);
+      if (playing && r.leadTime !== null) this.clock.follow(r.leadTime);
     }
     // During playback only redraw when the project frame changes: the display may refresh at
     // 60–120 Hz but the composition only changes at the project frame rate. This avoids

@@ -84,6 +84,22 @@ export class TimelineClock {
   }
 
   /**
+   * Gently steer the clock toward `target` (the lead media element's time).
+   * Small errors are corrected gradually (no visible jumps); large ones snap.
+   */
+  follow(target: number): void {
+    if (!this._playing) return;
+    const err = target - this.now();
+    if (Math.abs(err) > 0.5) {
+      this.anchorTime = target;
+      this.anchorPerf = performance.now();
+      this._holding = false;
+    } else if (Math.abs(err) > 0.004) {
+      this.anchorTime += err * 0.12;
+    }
+  }
+
+  /**
    * Freeze time while required media is buffering so that audio and video
    * stay in sync instead of jumping once data arrives.
    */

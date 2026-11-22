@@ -34,12 +34,17 @@ const POOL_SIZE: Record<Kind, number> = { video: 6, audio: 6 };
 /** Seconds before a clip starts when its element is prepared. */
 const PRELOAD = 1.5;
 /** Drift (seconds) after which a playing element is re-seeked. */
-const MAX_DRIFT = 0.2;
+const MAX_DRIFT = 0.3;
 const MAX_HOLD_MS = 2500;
 
 export interface SyncResult {
-  /** True while an active element is still buffering during playback. */
+  /** True while an active element is still buffering during playback (and nothing leads yet). */
   stalled: boolean;
+  /**
+   * Timeline time implied by the "lead" element (a playing video, else audio).
+   * The clock follows it so the lead element is never force-seeked during playback.
+   */
+  leadTime: number | null;
 }
 
 export class MediaPool {
@@ -49,7 +54,7 @@ export class MediaPool {
   private blessed = false;
   private stallSince = 0;
   /** Instrumentation: corrective seeks during playback and clock holds. */
-  stats = { playSeeks: 0, holdFrames: 0 };
+  stats = { playSeeks: 0, holdFrames: 0, leadDriftMs: 0 };
   /** Called whenever a new frame becomes available while paused. */
   onFrame: () => void = () => undefined;
   /** Called when a play() attempt was blocked by the browser. */
@@ -250,7 +255,26 @@ export class MediaPool {
       this.assign(slot, w.clip, w.asset);
     }
 
-    // 4. Drive each element from the clock.
+    // 4. Pick the lead element: an already-playing, ready element inside its clip core.
+    let leadId: string | null = null;
+    if (playing) {
+      let bestScore = -1;
+      for (const w of wanted) {
+        const slot = this.byClip.get(w.clip.id);
+        if (!slot) continue;
+        const el = slot.el;
+        const core = t >= w.clip.start && t < w.clip.start + w.clip.duration - 0.05;
+        if (!core || el.paused || el.seeking || slot.seeking || el.readyState < 2) continue;
+        const score = (slot.kind === 'video' ? 1000 : 0) + (w.clip.start + w.clip.duration - t);
+        if (score > bestScore) {
+          bestScore = score;
+          leadId = w.clip.id;
+        }
+      }
+    }
+    let leadTime: number | null = null;
+
+    // 5. Drive each element from the clock.
     let stalled = false;
     const graph = audioGraph.ready;
     const { width: W, height: H } = frameSize(project.settings);
@@ -284,11 +308,15 @@ export class MediaPool {
               );
             else slot.playPending = false;
           }
+        } else if (clip.id === leadId) {
+          // The clock follows this element; never seek it during playback.
+          leadTime = clip.start + (el.currentTime - clip.in) / clip.speed;
+          this.stats.leadDriftMs = Math.round((leadTime - t) * 1000);
         } else if (!slot.seeking && !el.seeking && Math.abs(el.currentTime - desired) > MAX_DRIFT * clip.speed) {
           this.stats.playSeeks++;
           this.seekSlot(slot, desired);
         }
-        if (el.readyState < 3 || slot.seeking) stalled = true;
+        if (el.paused || slot.seeking || el.readyState < 2) stalled = true;
       } else {
         if (!el.paused) el.pause();
         // While seeking, currentTime already reports the requested target.
@@ -327,8 +355,10 @@ export class MediaPool {
       if (now - this.stallSince > MAX_HOLD_MS) stalled = false;
     } else this.stallSince = 0;
 
+    // With a lead element, time follows it (it naturally waits while buffering): no hold needed.
+    if (leadTime !== null) stalled = false;
     if (stalled) this.stats.holdFrames++;
-    return { stalled };
+    return { stalled, leadTime };
   }
 
   /** True while any assigned element is still seeking (preview should keep redrawing). */

@@ -10,6 +10,24 @@ const [mediaDir, slow = '4'] = process.argv.slice(2);
 (async () => {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
+  if (process.env.FLAKY) {
+    // Simulate iOS Safari briefly reporting "not enough data" while a video keeps playing.
+    await page.addInitScript(() => {
+      const d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'readyState');
+      let until = 0;
+      Object.defineProperty(HTMLMediaElement.prototype, 'readyState', {
+        get() {
+          const real = d.get.call(this);
+          const now = performance.now();
+          if (!this.paused && real >= 3) {
+            if (now < until) return 2;
+            if (Math.random() < 0.01) { until = now + 150; return 2; }
+          }
+          return real;
+        },
+      });
+    });
+  }
   await page.goto('http://localhost:4173/?debug');
   await page.setInputFiles('[data-testid=file-input]', [path.join(mediaDir, 'clipA.webm'), path.join(mediaDir, 'portrait.webm'), path.join(mediaDir, 'tone.ogg')]);
   await page.waitForFunction(() => Object.values(window.__KING__.useMediaStore.getState().assets).every((a) => a.status !== 'loading'));
