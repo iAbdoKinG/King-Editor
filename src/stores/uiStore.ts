@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 
 export type PreviewQuality = 'full' | 'half' | 'quarter';
+/** 'gpu' shows media elements directly (smooth); 'canvas' draws every frame into a canvas. */
+export type PreviewRenderer = 'gpu' | 'canvas';
 export type Sheet = 'media' | 'inspector' | null;
 
 export interface Toast {
@@ -23,6 +25,7 @@ interface UIState {
   sheet: Sheet;
   snapping: boolean;
   quality: PreviewQuality;
+  renderer: PreviewRenderer;
   showStats: boolean;
   exportOpen: boolean;
   contextMenu: ContextMenuState | null;
@@ -45,6 +48,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   sheet: null,
   snapping: true,
   quality: 'half',
+  renderer: 'gpu',
   showStats: false,
   exportOpen: false,
   contextMenu: null,

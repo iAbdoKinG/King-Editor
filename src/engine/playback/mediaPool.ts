@@ -17,9 +17,11 @@ import { allMixesAt, clipRange } from '../timeline/transitions';
 
 type Kind = 'video' | 'audio';
 
-interface Slot {
+export interface Slot {
   kind: Kind;
   el: HTMLVideoElement | HTMLAudioElement;
+  /** Positioned wrapper used by the GPU (DOM) preview stage; video slots only. */
+  wrap: HTMLDivElement | null;
   clipId: string | null;
   url: string | null;
   seeking: boolean;
@@ -46,6 +48,8 @@ export class MediaPool {
   private container: HTMLDivElement;
   private blessed = false;
   private stallSince = 0;
+  /** Instrumentation: corrective seeks during playback and clock holds. */
+  stats = { playSeeks: 0, holdFrames: 0 };
   /** Called whenever a new frame becomes available while paused. */
   onFrame: () => void = () => undefined;
   /** Called when a play() attempt was blocked by the browser. */
@@ -55,18 +59,7 @@ export class MediaPool {
     this.container = document.createElement('div');
     this.container.setAttribute('aria-hidden', 'true');
     // Keep elements in the DOM (some iOS versions will not decode detached video).
-    Object.assign(this.container.style, {
-      position: 'fixed',
-      left: '0',
-      top: '0',
-      width: '2px',
-      height: '2px',
-      overflow: 'hidden',
-      opacity: '0.01',
-      pointerEvents: 'none',
-      zIndex: '-1',
-    });
-    document.body.appendChild(this.container);
+    this.mountStage(null);
     (['video', 'audio'] as Kind[]).forEach((kind) => {
       for (let i = 0; i < POOL_SIZE[kind]; i++) this.slots.push(this.createSlot(kind));
     });
@@ -81,10 +74,17 @@ export class MediaPool {
       el.playsInline = true;
       el.setAttribute('playsinline', '');
       el.setAttribute('webkit-playsinline', '');
-      el.width = 2;
-      el.height = 2;
     }
-    const slot: Slot = { kind, el, clipId: null, url: null, seeking: false, pendingSeek: null, playPending: false, lastUsed: 0 };
+    let wrap: HTMLDivElement | null = null;
+    if (el instanceof HTMLVideoElement) {
+      wrap = document.createElement('div');
+      Object.assign(wrap.style, { position: 'absolute', left: '0', top: '0', overflow: 'hidden', transformOrigin: '0 0', visibility: 'hidden' });
+      Object.assign(el.style, { position: 'absolute', left: '0', top: '0', maxWidth: 'none', objectFit: 'fill', display: 'block' });
+      el.removeAttribute('width');
+      el.removeAttribute('height');
+      wrap.appendChild(el);
+    }
+    const slot: Slot = { kind, el, wrap, clipId: null, url: null, seeking: false, pendingSeek: null, playPending: false, lastUsed: 0 };
     el.addEventListener('seeked', () => {
       slot.seeking = false;
       if (slot.pendingSeek !== null) {
@@ -96,8 +96,37 @@ export class MediaPool {
     });
     el.addEventListener('loadeddata', () => this.onFrame());
     el.addEventListener('canplay', () => this.onFrame());
-    this.container.appendChild(el);
+    this.container.appendChild(wrap ?? el);
     return slot;
+  }
+
+  /**
+   * Place the element container inside the preview so video is shown directly by the
+   * browser's GPU compositor (no per-frame copies). `null` parks it hidden in <body>.
+   * Moving the container keeps elements in the document, so playback is not interrupted.
+   */
+  mountStage(host: HTMLElement | null): void {
+    const c = this.container;
+    if (host) {
+      Object.assign(c.style, { position: 'absolute', left: '0', top: '0', width: '100%', height: '100%', overflow: 'hidden', opacity: '1', pointerEvents: 'none', zIndex: '0' });
+      host.appendChild(c);
+    } else {
+      Object.assign(c.style, { position: 'fixed', left: '0', top: '0', width: '2px', height: '2px', overflow: 'hidden', opacity: '0.01', pointerEvents: 'none', zIndex: '-1' });
+      document.body.appendChild(c);
+    }
+  }
+
+  get stageRoot(): HTMLDivElement {
+    return this.container;
+  }
+
+  /** Slot currently assigned to a clip (used by the DOM stage). */
+  slotFor(clipId: string): Slot | undefined {
+    return this.byClip.get(clipId);
+  }
+
+  get videoSlots(): Slot[] {
+    return this.slots.filter((s) => s.wrap);
   }
 
   /** Must be called synchronously inside a user gesture handler. */
@@ -256,6 +285,7 @@ export class MediaPool {
             else slot.playPending = false;
           }
         } else if (!slot.seeking && !el.seeking && Math.abs(el.currentTime - desired) > MAX_DRIFT * clip.speed) {
+          this.stats.playSeeks++;
           this.seekSlot(slot, desired);
         }
         if (el.readyState < 3 || slot.seeking) stalled = true;
@@ -297,6 +327,7 @@ export class MediaPool {
       if (now - this.stallSince > MAX_HOLD_MS) stalled = false;
     } else this.stallSince = 0;
 
+    if (stalled) this.stats.holdFrames++;
     return { stalled };
   }
 

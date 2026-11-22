@@ -26,7 +26,7 @@ import { defaultAudio, defaultEffects, defaultTransform, frameSize } from '../..
 import { setClipSpeed, updateClip } from '../../engine/timeline/ops';
 import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
-import { useUIStore, type PreviewQuality } from '../../stores/uiStore';
+import { useUIStore, type PreviewQuality, type PreviewRenderer } from '../../stores/uiStore';
 import { formatTimecode } from '../../utils/time';
 import { Row, Section, Segmented, SliderField, Toggle } from './controls';
 
@@ -475,6 +475,7 @@ function ProjectInspector() {
   const apply = useProjectStore((s) => s.apply);
   const quality = useUIStore((s) => s.quality);
   const showStats = useUIStore((s) => s.showStats);
+  const renderer = useUIStore((s) => s.renderer);
   const setUI = useUIStore((s) => s.set);
   const set = (p: Partial<ProjectSettings>) => apply((pr) => ({ ...pr, settings: { ...pr.settings, ...p } }));
   const { width, height } = frameSize(settings);
@@ -533,10 +534,21 @@ function ProjectInspector() {
             onChange={(v) => setUI({ quality: v })}
           />
         </Row>
+        <Row label="Renderer">
+          <Segmented<PreviewRenderer>
+            label="Preview renderer"
+            value={renderer}
+            options={[
+              { value: 'gpu', label: 'GPU (smooth)' },
+              { value: 'canvas', label: 'Canvas' },
+            ]}
+            onChange={(v) => setUI({ renderer: v })}
+          />
+        </Row>
         <Row label="Perf stats">
           <Toggle label="Show performance stats" checked={showStats} onChange={(v) => setUI({ showStats: v })} />
         </Row>
-        <p className="text-[11px] leading-snug text-muted">Lower preview quality reduces GPU and memory load on older devices.</p>
+        <p className="text-[11px] leading-snug text-muted">GPU shows video directly through the browser compositor (smoothest). Quality applies to the Canvas renderer.</p>
       </Section>
     </>
   );

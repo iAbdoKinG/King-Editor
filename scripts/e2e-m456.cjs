@@ -15,6 +15,51 @@ const check = (name, ok, detail = '') => {
 };
 const m = (f) => path.join(mediaDir, f);
 
+/** Pixel statistics of the preview (works for both GPU stage and canvas renderer). */
+async function previewPng(page) {
+  const loc = page.locator('[data-testid=preview-stage], [data-testid=preview-canvas]').first();
+  return (await loc.screenshot()).toString('base64');
+}
+async function pngStats(page, b64) {
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + b64;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = 160;
+    c.height = Math.round((160 * img.height) / img.width);
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0, c.width, c.height);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let sum = 0;
+    const distinct = new Set();
+    for (let i = 0; i < d.length; i += 4) {
+      sum += d[i] + d[i + 1] + d[i + 2];
+      distinct.add((d[i] >> 4) * 256 + (d[i + 1] >> 4) * 16 + (d[i + 2] >> 4));
+    }
+    return { mean: sum / (d.length / 4) / 3, distinct: distinct.size, w: img.width, h: img.height };
+  }, b64);
+}
+async function pngDiff(page, a, b) {
+  return page.evaluate(async ([a, b]) => {
+    const load = async (s) => {
+      const img = new Image();
+      img.src = 'data:image/png;base64,' + s;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = 160;
+      c.height = 90;
+      const x = c.getContext('2d');
+      x.drawImage(img, 0, 0, 160, 90);
+      return x.getImageData(0, 0, 160, 90).data;
+    };
+    const [da, db] = [await load(a), await load(b)];
+    let s = 0;
+    for (let i = 0; i < da.length; i += 4) s += Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]);
+    return s / (da.length / 4) / 3;
+  }, [a, b]);
+}
+
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, acceptDownloads: true });
@@ -70,14 +115,8 @@ const m = (f) => path.join(mediaDir, f);
   // preview brightness at t=2.9 should be darker than at t=0.5 (opacity fades to 0 over black bg)
   const mean = async (t) => {
     await page.evaluate((t) => window.__KING__.engine.seek(t), t);
-    await page.waitForTimeout(500);
-    return page.evaluate(() => {
-      const c = document.querySelector('[data-testid=preview-canvas]');
-      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-      let s = 0;
-      for (let i = 0; i < d.length; i += 4 * 53) s += d[i] + d[i + 1] + d[i + 2];
-      return s / (d.length / (4 * 53)) / 3;
-    });
+    await page.waitForTimeout(600);
+    return (await pngStats(page, await previewPng(page))).mean;
   };
   const m05 = await mean(0.5);
   const m29 = await mean(2.9);
@@ -107,6 +146,20 @@ const m = (f) => path.join(mediaDir, f);
   check('preview renders during transition', cutMean > 5, `mean@cut=${cutMean.toFixed(1)} (${layers})`);
   await page.screenshot({ path: path.join(outDir, 'transition.png') });
 
+  // GPU preview and canvas renderer (used for export) must show the same picture.
+  await page.evaluate(() => window.__KING__.useProjectStore.getState().selectTransition(null));
+  const cmpAt = B.start + 0.1;
+  await page.evaluate((t) => window.__KING__.engine.seek(t), cmpAt);
+  await page.waitForTimeout(700);
+  const gpuShot = await previewPng(page);
+  await page.evaluate(() => window.__KING__.useUIStore.getState().set({ renderer: 'canvas', quality: 'full' }));
+  await page.evaluate((t) => window.__KING__.engine.seek(t), cmpAt);
+  await page.waitForTimeout(700);
+  const canvasShot = await previewPng(page);
+  const diff = await pngDiff(page, gpuShot, canvasShot);
+  check('GPU preview matches canvas/export renderer', diff < 10, `mean abs diff=${diff.toFixed(2)}/255`);
+  await page.evaluate(() => window.__KING__.useUIStore.getState().set({ renderer: 'gpu', quality: 'half' }));
+
   // Undo/redo of transition
   await page.click('[data-testid=undo]');
   s = await S();
@@ -116,7 +169,7 @@ const m = (f) => path.join(mediaDir, f);
   /* ---------- export ---------- */
   await page.getByRole('button', { name: 'Export' }).first().click();
   await page.waitForSelector('[data-testid=export-dialog]');
-  await page.getByRole('radio', { name: '720p' }).click();
+  await page.getByTestId('export-dialog').getByRole('radio', { name: '720p' }).click();
   await page.waitForFunction(() => !document.querySelector('[data-testid=export-start]')?.disabled, null, { timeout: 15000 });
   await page.waitForFunction(() => document.querySelector('[data-testid=export-dialog]')?.innerText.includes('1280×720'));
   const planText = await page.locator('[data-testid=export-dialog]').innerText();

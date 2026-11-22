@@ -11,6 +11,7 @@ npm test           # unit tests (timeline ops, audio envelopes)
 npm run build && npx vite preview --port 4173 &
 node scripts/e2e.cjs <media-dir> <screenshot-dir>
 node scripts/e2e-m456.cjs <media-dir> <out-dir>   # keyframes, transitions, export (+ ffprobe)
+node scripts/measure-playback.cjs <media-dir> 6   # playback smoothness under 6× CPU slowdown
 ```
 
 ## Architecture
@@ -38,6 +39,7 @@ src/
 Key decisions:
 
 - **One clock.** Media elements never drive time. They are re-seeked when they drift more than 200 ms, and the clock holds while active media buffers, for up to 2.5 s.
+- **GPU preview (default).** Video is never copied into a canvas during playback. The pooled `<video>` elements themselves are positioned inside the preview, and transforms, keyframes, transitions, crop, opacity and filters are applied as CSS, so the browser's GPU compositor does the work (`engine/rendering/domStage.ts`). Export uses the canvas compositor with the same geometry; an e2e check confirms both produce the same picture (mean difference under 1/255). Profiling with a 6× slowed CPU: before, `drawImage` took about 80% of the main thread and frame-time p95 was 150 ms; after, p95 is 16.7 ms and the main thread is 68% idle. A Canvas renderer remains available under Project → Preview.
 - **High-frequency state stays out of React.** The playhead, timecode and transform outline are written to the DOM from the engine's rAF loop.
 - **Bounded decoding.** Six video and six audio elements are reused. An element gets a `src` only while its clip is within about 1.5 s of the playhead, and it is unloaded afterwards.
 - **iOS media rules.** On the first user gesture, every pooled element is unlocked and the `AudioContext` is created. Video is always `playsinline`. Volume, pan and fades go through Web Audio, because iOS ignores `element.volume`.

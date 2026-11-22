@@ -7,6 +7,7 @@ import type { MediaAsset, Project } from '../../types/project';
 import { TimelineClock } from './clock';
 import { MediaPool } from './mediaPool';
 import { renderFrame } from '../rendering/compositor';
+import { DomStage } from '../rendering/domStage';
 import { imageCache } from '../rendering/imageCache';
 import { projectDuration } from '../timeline/model';
 
@@ -21,10 +22,13 @@ class PlaybackEngine {
   readonly clock = new TimelineClock();
   private pool: MediaPool | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private stage: DomStage | null = null;
   private dirty = true;
   private running = false;
   private idleFrames = 0;
   private lastT = -1;
+  /** Last project frame index drawn during playback (frame-gating). */
+  private lastFrameIdx = -1;
   private lastProject: Project | null = null;
   private lastAssets: Record<string, MediaAsset> | null = null;
   private timeListeners = new Set<TimeListener>();
@@ -59,6 +63,24 @@ class PlaybackEngine {
 
   attachCanvas(canvas: HTMLCanvasElement | null): void {
     this.ctx = canvas ? canvas.getContext('2d', { alpha: false, desynchronized: true }) : null;
+    this.invalidate();
+  }
+
+  /** GPU preview: show media elements directly inside `host` (see DomStage). */
+  attachStage(host: HTMLElement | null, cssWidth = 0): void {
+    if (!this.pool) return;
+    this.stage?.dispose();
+    this.stage = null;
+    this.pool.mountStage(host);
+    if (host) {
+      this.stage = new DomStage(this.pool.stageRoot, this.pool);
+      this.stage.setSize(cssWidth);
+    }
+    this.invalidate();
+  }
+
+  setStageSize(cssWidth: number): void {
+    this.stage?.setSize(cssWidth);
     this.invalidate();
   }
 
@@ -109,13 +131,22 @@ class PlaybackEngine {
       const r = this.pool.sync(project, assets, t, playing);
       this.clock.hold(r.stalled);
     }
-    const draw = playing || changed || this.dirty || (this.pool?.busy ?? false);
-    if (draw && this.ctx) {
+    // During playback only redraw when the project frame changes: the display may refresh at
+    // 60–120 Hz but the composition only changes at the project frame rate. This avoids
+    // copying video frames to the canvas 2–4× more often than needed.
+    const frameIdx = Math.floor(t * project.settings.fps + 1e-6);
+    const structural = project !== this.lastProject || assets !== this.lastAssets || this.dirty;
+    const draw = playing
+      ? frameIdx !== this.lastFrameIdx || structural
+      : changed || this.dirty || (this.pool?.busy ?? false);
+    if (draw && (this.stage || this.ctx)) {
       const r0 = performance.now();
-      renderFrame(this.ctx, { project, assets, t, source: this.pool! });
+      if (this.stage) this.stage.render(project, assets, t);
+      else renderFrame(this.ctx!, { project, assets, t, source: this.pool! });
       const r1 = performance.now();
       this.stats.renderMs = this.stats.renderMs * 0.9 + (r1 - r0) * 0.1;
       this.dirty = false;
+      this.lastFrameIdx = frameIdx;
       for (const fn of this.frameListeners) fn();
     }
     if (t !== this.lastT) for (const fn of this.timeListeners) fn(t);

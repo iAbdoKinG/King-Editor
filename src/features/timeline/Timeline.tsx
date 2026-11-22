@@ -64,6 +64,8 @@ export function Timeline({ compact }: { compact: boolean }) {
   const dragRef = useRef<DragState | null>(null);
   const pointers = useRef(new Set<number>());
   const pendingScroll = useRef<number | null>(null);
+  const scrollerWidth = useRef(0);
+  const scrollerLeft = useRef(0);
   const ppsRef = useRef(pps);
   ppsRef.current = pps;
   const [view, setView] = useState({ left: 0, width: 1200 });
@@ -100,6 +102,8 @@ export function Timeline({ compact }: { compact: boolean }) {
     const update = () => {
       raf = 0;
       if (headersRef.current) headersRef.current.style.transform = `translateY(${-scroller.scrollTop}px)`;
+      scrollerWidth.current = scroller.clientWidth;
+      scrollerLeft.current = scroller.scrollLeft;
       // Quantize so React only re-renders when the visible window moves meaningfully.
       const q = 300;
       const left = Math.floor(scroller.scrollLeft / q) * q;
@@ -205,10 +209,14 @@ export function Timeline({ compact }: { compact: boolean }) {
     return engine.onTime((t) => {
       const x = t * ppsRef.current;
       if (playheadRef.current) playheadRef.current.style.transform = `translateX(${x}px)`;
-      // Page-follow during playback.
+      // Page-follow during playback (width cached: no layout reads per frame).
       if (scroller && engine.clock.playing && !dragRef.current) {
-        const w = scroller.clientWidth;
-        if (x > scroller.scrollLeft + w - 32 || x < scroller.scrollLeft) scroller.scrollLeft = x - 32;
+        const w = scrollerWidth.current;
+        const left = scrollerLeft.current;
+        if (x > left + w - 32 || x < left) {
+          scroller.scrollLeft = x - 32;
+          scrollerLeft.current = x - 32;
+        }
       }
     });
   }, [scroller]);

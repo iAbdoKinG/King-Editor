@@ -11,6 +11,8 @@ const QUALITY = { full: 1, half: 0.5, quarter: 0.25 } as const;
 export function Preview({ theater = false }: { theater?: boolean }) {
   const settings = useProjectStore((s) => s.project.settings);
   const quality = useUIStore((s) => s.quality);
+  const renderer = useUIStore((s) => s.renderer);
+  const stageRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -50,19 +52,27 @@ export function Preview({ theater = false }: { theater?: boolean }) {
   }, [box.w, box.h, W, H, quality]);
 
   useEffect(() => {
+    if (renderer === 'gpu') {
+      engine.attachStage(stageRef.current, box.w);
+      return () => engine.attachStage(null);
+    }
     engine.attachCanvas(canvasRef.current);
     return () => engine.attachCanvas(null);
-  }, []);
+    // box.w is applied by the effect below; re-attaching on resize is unnecessary.
+  }, [renderer]);
+
+  useEffect(() => {
+    if (renderer === 'gpu') engine.setStageSize(box.w);
+  }, [box.w, renderer]);
 
   return (
     <div ref={hostRef} className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-[#0f1215]">
       <div className="relative shadow-[0_0_0_1px_rgba(57,67,74,0.8)]" style={{ width: box.w, height: box.h }}>
-        <canvas
-          ref={canvasRef}
-          className="block h-full w-full"
-          aria-label="Preview"
-          data-testid="preview-canvas"
-        />
+        {renderer === 'gpu' ? (
+          <div ref={stageRef} className="absolute inset-0 overflow-hidden" aria-label="Preview" data-testid="preview-stage" />
+        ) : (
+          <canvas ref={canvasRef} className="block h-full w-full" aria-label="Preview" data-testid="preview-canvas" />
+        )}
         <TransformOverlay width={box.w} height={box.h} />
       </div>
     </div>

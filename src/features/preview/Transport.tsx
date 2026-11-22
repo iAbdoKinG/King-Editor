@@ -46,6 +46,7 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
   const aspect = useProjectStore((s) => s.project.settings.aspect);
   const apply = useProjectStore((s) => s.apply);
   const quality = useUIStore((s) => s.quality);
+  const renderer = useUIStore((s) => s.renderer);
   const setUI = useUIStore((s) => s.set);
 
   return (
@@ -90,7 +91,7 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
             <option key={a}>{a}</option>
           ))}
         </select>
-        {!compact && (
+        {!compact && renderer === 'canvas' && (
           <select
             className="field !h-8 !w-auto !pr-1 text-[12px]"
             aria-label="Preview quality"

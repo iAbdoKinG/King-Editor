@@ -32,15 +32,54 @@ async function state(page) {
   });
 }
 
+
+/** Pixel statistics of the preview (works for both GPU stage and canvas renderer). */
+async function previewPng(page) {
+  const loc = page.locator('[data-testid=preview-stage], [data-testid=preview-canvas]').first();
+  return (await loc.screenshot()).toString('base64');
+}
+async function pngStats(page, b64) {
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = 'data:image/png;base64,' + b64;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = 160;
+    c.height = Math.round((160 * img.height) / img.width);
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0, c.width, c.height);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let sum = 0;
+    const distinct = new Set();
+    for (let i = 0; i < d.length; i += 4) {
+      sum += d[i] + d[i + 1] + d[i + 2];
+      distinct.add((d[i] >> 4) * 256 + (d[i + 1] >> 4) * 16 + (d[i + 2] >> 4));
+    }
+    return { mean: sum / (d.length / 4) / 3, distinct: distinct.size, w: img.width, h: img.height };
+  }, b64);
+}
+async function pngDiff(page, a, b) {
+  return page.evaluate(async ([a, b]) => {
+    const load = async (s) => {
+      const img = new Image();
+      img.src = 'data:image/png;base64,' + s;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = 160;
+      c.height = 90;
+      const x = c.getContext('2d');
+      x.drawImage(img, 0, 0, 160, 90);
+      return x.getImageData(0, 0, 160, 90).data;
+    };
+    const [da, db] = [await load(a), await load(b)];
+    let s = 0;
+    for (let i = 0; i < da.length; i += 4) s += Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]);
+    return s / (da.length / 4) / 3;
+  }, [a, b]);
+}
+
 async function canvasStats(page) {
-  return page.evaluate(() => {
-    const c = document.querySelector('[data-testid=preview-canvas]');
-    const ctx = c.getContext('2d');
-    const d = ctx.getImageData(0, 0, c.width, c.height).data;
-    let sum = 0, n = 0, distinct = new Set();
-    for (let i = 0; i < d.length; i += 4 * 97) { sum += d[i] + d[i + 1] + d[i + 2]; n++; distinct.add((d[i] >> 4) * 256 + (d[i + 1] >> 4) * 16 + (d[i + 2] >> 4)); }
-    return { mean: sum / n / 3, distinct: distinct.size, w: c.width, h: c.height };
-  });
+  return pngStats(page, await previewPng(page));
 }
 
 (async () => {
@@ -54,7 +93,7 @@ async function canvasStats(page) {
   page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
   page.on('dialog', (d) => d.accept());
   await page.goto(URL_);
-  await page.waitForSelector('[data-testid=preview-canvas]');
+  await page.waitForSelector('[data-testid=preview-stage]');
 
   await page.setInputFiles('[data-testid=file-input]', [m('clipA.webm'), m('portrait.webm'), m('tone.ogg'), m('still.png'), m('notes.txt')]);
   await page.waitForFunction(() => Object.values(window.__KING__.useMediaStore.getState().assets).every((a) => a.status !== 'loading'), null, { timeout: 20000 });
