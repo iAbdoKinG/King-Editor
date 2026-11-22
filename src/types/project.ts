@@ -76,6 +76,32 @@ export interface TextStyle {
   background: string | null;
 }
 
+export type Easing = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+
+/** Properties that can be animated with keyframes. */
+export type AnimProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity';
+
+export interface Keyframe {
+  /** Clip-local time (seconds from clip start). */
+  t: number;
+  v: number;
+  /** Easing of the segment that starts at this keyframe. */
+  ease: Easing;
+}
+
+export type Keyframes = Partial<Record<AnimProp, Keyframe[]>>;
+
+export type TransitionType = 'fade' | 'dissolve' | 'slide' | 'zoom';
+export type Direction = 'left' | 'right' | 'up' | 'down';
+
+/** A transition from the previous adjacent clip into this one, centred on the cut. */
+export interface Transition {
+  type: TransitionType;
+  duration: number;
+  direction: Direction;
+  easing: Easing;
+}
+
 interface ClipBase {
   id: string;
   trackId: string;
@@ -83,6 +109,8 @@ interface ClipBase {
   start: number;
   /** Timeline duration. */
   duration: number;
+  keyframes?: Keyframes;
+  transitionIn?: Transition;
 }
 
 export interface MediaClip extends ClipBase {

@@ -20,13 +20,14 @@ import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { MAX_PX_PER_SEC, MIN_PX_PER_SEC, useUIStore } from '../../stores/uiStore';
 import { clamp } from '../../utils/time';
-import { addAssetToTimeline } from './actions';
+import { addAssetToTimeline, addTransition } from './actions';
+import { effectiveTransition, prevAdjacent } from '../../engine/timeline/transitions';
 import { ClipView } from './ClipView';
 import { ASSET_DRAG_TYPE, DRAG_SLOP, HEADER_W, HEADER_W_COMPACT, LONG_PRESS_MS, RULER_H, SNAP_PX, TRACK_H, TRACK_H_COMPACT } from './constants';
 import { Ruler } from './Ruler';
 import { TrackHeader } from './TrackHeader';
 
-type Mode = 'pending-clip' | 'pending-empty' | 'move' | 'trim-start' | 'trim-end' | 'scrub' | 'none';
+type Mode = 'pending-clip' | 'pending-empty' | 'pending-transition' | 'move' | 'trim-start' | 'trim-end' | 'scrub' | 'none';
 
 interface DragState {
   pointerId: number;
@@ -52,6 +53,7 @@ interface LaneLayout {
 export function Timeline({ compact }: { compact: boolean }) {
   const project = useProjectStore((s) => s.project);
   const selectedClipId = useProjectStore((s) => s.selectedClipId);
+  const selectedTransitionId = useProjectStore((s) => s.selectedTransitionId);
   const assets = useMediaStore((s) => s.assets);
   const pps = useUIStore((s) => s.pxPerSec);
 
@@ -284,6 +286,24 @@ export function Timeline({ compact }: { compact: boolean }) {
     }
     useUIStore.getState().set({ contextMenu: null });
     const target = e.target as HTMLElement;
+    const transEl = target.closest('[data-transition-for]') as HTMLElement | null;
+    if (transEl) {
+      dragRef.current = {
+        pointerId: e.pointerId,
+        pointerType: e.pointerType,
+        mode: 'pending-transition',
+        clipId: transEl.dataset.transitionFor ?? null,
+        x0: e.clientX,
+        y0: e.clientY,
+        t0: 0,
+        origStart: 0,
+        grabOffset: 0,
+        candidates: [],
+        wasSelected: false,
+        longPress: 0,
+      };
+      return;
+    }
     const handle = target.closest('[data-handle]') as HTMLElement | null;
     const clipEl = target.closest('[data-clip-id]') as HTMLElement | null;
     const clipId = clipEl?.dataset.clipId ?? null;
@@ -342,6 +362,8 @@ export function Timeline({ compact }: { compact: boolean }) {
         clearTimeout(d.longPress);
         d.mode = 'none'; // native scroll takes over
       }
+    } else if (d.mode === 'pending-transition' && far) {
+      d.mode = 'none';
     } else if (d.mode === 'pending-empty' && far) {
       if (d.pointerType === 'mouse') {
         d.mode = 'scrub';
@@ -389,7 +411,8 @@ export function Timeline({ compact }: { compact: boolean }) {
       return;
     }
     if (cancelled) return;
-    if (d.mode === 'pending-clip' && d.clipId) ps.select(d.clipId);
+    if (d.mode === 'pending-transition' && d.clipId) addTransition(d.clipId);
+    else if (d.mode === 'pending-clip' && d.clipId) ps.select(d.clipId);
     else if (d.mode === 'pending-empty') {
       ps.select(null);
       engine.seek(d.t0);
@@ -508,6 +531,51 @@ export function Timeline({ compact }: { compact: boolean }) {
                   />
                 ) : null,
               )}
+              {l.track.kind !== 'audio' &&
+                (clipsByTrack.get(l.track.id) ?? []).map((c) => {
+                  if (c.start < visFrom || c.start > visTo) return null;
+                  const prev = prevAdjacent(project, c);
+                  if (!prev) return null;
+                  const eff = effectiveTransition(project, c);
+                  if (eff) {
+                    const sel = selectedTransitionId === c.id;
+                    return (
+                      <div
+                        key={`tr-${c.id}`}
+                        data-transition-for={c.id}
+                        role="button"
+                        aria-label="Transition"
+                        aria-pressed={sel}
+                        className={`absolute top-[3px] z-[4] flex items-center justify-center rounded-[5px] border ${
+                          sel ? 'border-accent bg-accent/35' : 'border-text/40 bg-black/35'
+                        }`}
+                        style={{
+                          left: (c.start - eff.d / 2) * pps,
+                          width: Math.max(14, eff.d * pps),
+                          height: l.h - 6,
+                          backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,.14) 0 4px, transparent 4px 8px)',
+                        }}
+                      >
+                        <span className="text-[10px] font-bold text-text/90">⧓</span>
+                      </div>
+                    );
+                  }
+                  if (selectedClipId === c.id || selectedClipId === prev.id) return null;
+                  return (
+                    <div
+                      key={`tr-${c.id}`}
+                      data-transition-for={c.id}
+                      role="button"
+                      aria-label="Add transition"
+                      className="absolute z-[4] flex h-7 w-7 -translate-x-1/2 items-center justify-center"
+                      style={{ left: c.start * pps, top: (l.h - 28) / 2 }}
+                    >
+                      <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-line bg-elevated text-[12px] leading-none text-muted shadow">
+                        +
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           ))}
 

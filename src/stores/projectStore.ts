@@ -17,6 +17,8 @@ interface ProjectState {
   future: Project[];
   selectedClipId: string | null;
   selectedTrackId: string | null;
+  /** Id of the clip whose incoming transition is selected. */
+  selectedTransitionId: string | null;
   /** Snapshot taken at the start of a continuous gesture. */
   txBase: Project | null;
 
@@ -28,6 +30,7 @@ interface ProjectState {
   redo: () => void;
   select: (clipId: string | null) => void;
   selectTrack: (trackId: string | null) => void;
+  selectTransition: (clipId: string | null) => void;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -36,6 +39,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   future: [],
   selectedClipId: null,
   selectedTrackId: null,
+  selectedTransitionId: null,
   txBase: null,
 
   apply: (fn, opts) => {
@@ -81,15 +85,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   select: (clipId) => {
     const clip = clipId ? get().project.clips[clipId] : null;
-    set({ selectedClipId: clip ? clipId : null, selectedTrackId: clip ? clip.trackId : get().selectedTrackId });
+    set({
+      selectedClipId: clip ? clipId : null,
+      selectedTrackId: clip ? clip.trackId : get().selectedTrackId,
+      selectedTransitionId: null,
+    });
   },
 
   selectTrack: (trackId) => set({ selectedTrackId: trackId }),
+
+  selectTransition: (clipId) => {
+    const clip = clipId ? get().project.clips[clipId] : null;
+    set({ selectedTransitionId: clip?.transitionIn ? clip.id : null, selectedClipId: null });
+  },
 }));
 
 function validSelection(p: Project, s: ProjectState): Partial<ProjectState> {
   return {
     selectedClipId: s.selectedClipId && p.clips[s.selectedClipId] ? s.selectedClipId : null,
     selectedTrackId: s.selectedTrackId && p.tracks.some((t) => t.id === s.selectedTrackId) ? s.selectedTrackId : null,
+    selectedTransitionId:
+      s.selectedTransitionId && p.clips[s.selectedTransitionId]?.transitionIn ? s.selectedTransitionId : null,
   };
 }

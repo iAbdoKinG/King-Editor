@@ -12,7 +12,9 @@ import {
   insertClip,
   rippleDelete,
   splitClip,
+  updateClip,
 } from '../../engine/timeline/ops';
+import { defaultTransition, maxTransitionDuration, prevAdjacent } from '../../engine/timeline/transitions';
 import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -95,6 +97,11 @@ export function duplicateSelected(): void {
 }
 
 export function deleteSelected(ripple = false): void {
+  const tid = ps().selectedTransitionId;
+  if (tid) {
+    removeTransition(tid);
+    return;
+  }
   const id = ps().selectedClipId;
   if (!id) return;
   ps().apply((p) => (ripple ? rippleDelete(p, id) : deleteClips(p, [id])));
@@ -138,4 +145,26 @@ export function moveSelectedToTrack(dir: -1 | 1): void {
     return;
   }
   toast('No other compatible track in that direction.');
+}
+
+/** Add (or select) the transition into `clipId` from the adjacent previous clip. */
+export function addTransition(clipId: string): void {
+  const { project } = ps();
+  const clip = project.clips[clipId];
+  if (!clip) return;
+  const prev = prevAdjacent(project, clip);
+  if (!prev) {
+    toast('Transitions need two clips touching on the same track.');
+    return;
+  }
+  if (!clip.transitionIn) {
+    const d = Math.min(defaultTransition().duration, maxTransitionDuration(prev, clip));
+    ps().apply((p) => updateClip(p, clipId, (c) => ({ ...c, transitionIn: { ...defaultTransition(), duration: d } })));
+  }
+  ps().selectTransition(clipId);
+}
+
+export function removeTransition(clipId: string): void {
+  ps().apply((p) => updateClip(p, clipId, (c) => ({ ...c, transitionIn: undefined })));
+  ps().selectTransition(null);
 }

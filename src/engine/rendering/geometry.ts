@@ -2,7 +2,7 @@
  * Shared geometry for the compositor, transform overlay and hit testing so
  * that what is drawn, what is selectable and what is exported always agree.
  */
-import type { Clip, MediaAsset, TextClip } from '../../types/project';
+import type { Clip, MediaAsset, TextClip, Transform } from '../../types/project';
 
 export interface ClipBox {
   /** Anchor position in project pixels (from the frame's top-left). */
@@ -57,8 +57,13 @@ export function fitContain(sw: number, sh: number, W: number, H: number): { w: n
   return { w: sw * k, h: sh * k };
 }
 
-export function clipBox(clip: Clip, assets: Record<string, MediaAsset>, W: number, H: number): ClipBox | null {
-  const tr = clip.transform;
+export function clipBox(
+  clip: Clip,
+  assets: Record<string, MediaAsset>,
+  W: number,
+  H: number,
+  tr: Transform = clip.transform,
+): ClipBox | null {
   let w: number;
   let h: number;
   if (clip.type === 'text') {

@@ -21,6 +21,18 @@ class ImageCache {
     return typeof e === 'string' ? null : e;
   }
 
+  /** Resolve once the image is decoded (used by export, which cannot skip frames). */
+  async ensure(asset: MediaAsset): Promise<void> {
+    if (this.get(asset)) return;
+    for (let i = 0; i < 300; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      const e = this.entries.get(asset.id);
+      if (e === 'error') throw new Error(`Could not decode ${asset.name}`);
+      if (e && e !== 'loading') return;
+    }
+    throw new Error(`Timed out decoding ${asset.name}`);
+  }
+
   private async load(asset: MediaAsset): Promise<void> {
     try {
       const img = new Image();

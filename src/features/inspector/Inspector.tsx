@@ -3,7 +3,23 @@
  * selection (video / image / audio / text clip, or project settings).
  */
 import { useState } from 'react';
-import type { Clip, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform } from '../../types/project';
+import type { AnimProp, Clip, Direction, Easing, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform, Transition, TransitionType } from '../../types/project';
+import { engine } from '../../engine/playback/engine';
+import {
+  ANIM_PROPS,
+  KF_EPS,
+  clearAnimation,
+  hasKeyframes,
+  keyframeIndexAt,
+  keyframeTimes,
+  resolveTransform,
+  setAnimatedValue,
+  setEasingAt,
+  toggleKeyframe,
+} from '../../engine/timeline/animation';
+import { TRANSITION_TYPES, maxTransitionDuration, prevAdjacent } from '../../engine/timeline/transitions';
+import { usePlayheadTime } from '../../hooks/usePlayheadTime';
+import { addTransition, removeTransition } from '../timeline/actions';
 import { Icon } from '../../components/Icon';
 import { canvasFilterSupported } from '../../engine/rendering/compositor';
 import { defaultAudio, defaultEffects, defaultTransform, frameSize } from '../../engine/timeline/model';
@@ -30,52 +46,221 @@ function ResetButton({ onClick, label }: { onClick: () => void; label: string })
   );
 }
 
+function useClipTime(clip: Clip) {
+  const t = usePlayheadTime();
+  const inside = t >= clip.start && t < clip.start + clip.duration;
+  const lt = Math.min(Math.max(0, t - clip.start), clip.duration);
+  return { t, lt, inside };
+}
+
 function TransformSection({ clip }: { clip: Clip }) {
   const patch = usePatch(clip.id);
-  const t = clip.transform;
+  const base = clip.transform;
+  const { lt, inside } = useClipTime(clip);
+  const tr = resolveTransform(clip, lt);
   const set = (p: Partial<Transform>, commit: boolean) => patch((c) => ({ ...c, transform: { ...c.transform, ...p } }) as Clip, commit);
-  const [uniform, setUniform] = useState(() => Math.abs(t.scaleX - t.scaleY) < 1e-6);
+  const anim = (prop: AnimProp, v: number, commit: boolean) => patch((c) => setAnimatedValue(c, prop, lt, v), commit);
+  const kf = (prop: AnimProp) => ({
+    on: keyframeIndexAt(clip.keyframes?.[prop], lt) >= 0,
+    animated: hasKeyframes(clip, prop),
+    disabled: !inside,
+    onToggle: () => patch((c) => toggleKeyframe(c, prop, lt)),
+  });
+  const scaleAnimated = hasKeyframes(clip, 'scale');
+  const [uniformPref, setUniform] = useState(() => Math.abs(base.scaleX - base.scaleY) < 1e-6);
+  const uniform = uniformPref || scaleAnimated;
   const settings = useProjectStore((s) => s.project.settings);
   const { width: W, height: H } = frameSize(settings);
   return (
     <Section
       title="Transform"
-      action={<ResetButton label="Reset transform" onClick={() => set({ ...defaultTransform(), crop: t.crop }, true)} />}
+      action={
+        <ResetButton
+          label="Reset transform"
+          onClick={() => patch((c) => ({ ...c, keyframes: undefined, transform: { ...defaultTransform(), crop: c.transform.crop } }) as Clip)}
+        />
+      }
     >
-      <SliderField label="Position X" value={t.x} min={-W} max={W} step={1} onChange={(v, c) => set({ x: v }, c)} />
-      <SliderField label="Position Y" value={t.y} min={-H} max={H} step={1} onChange={(v, c) => set({ y: v }, c)} />
+      <SliderField label="Position X" value={tr.x} min={-W} max={W} step={1} keyframe={kf('x')} onChange={(v, c) => anim('x', v, c)} />
+      <SliderField label="Position Y" value={tr.y} min={-H} max={H} step={1} keyframe={kf('y')} onChange={(v, c) => anim('y', v, c)} />
       {uniform ? (
         <SliderField
           label="Scale %"
-          value={t.scaleX}
+          value={tr.scaleX}
           min={0.05}
           max={4}
           step={0.01}
           display={pct}
           parse={fromPct}
-          onChange={(v, c) => set({ scaleX: v, scaleY: v }, c)}
+          keyframe={kf('scale')}
+          onChange={(v, c) => anim('scale', v, c)}
         />
       ) : (
         <>
-          <SliderField label="Scale X %" value={t.scaleX} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleX: v }, c)} />
-          <SliderField label="Scale Y %" value={t.scaleY} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleY: v }, c)} />
+          <SliderField label="Scale X %" value={base.scaleX} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleX: v }, c)} />
+          <SliderField label="Scale Y %" value={base.scaleY} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleY: v }, c)} />
         </>
       )}
-      <Row label="Uniform">
-        <Toggle
-          label="Uniform scale"
-          checked={uniform}
-          onChange={(on) => {
-            setUniform(on);
-            if (on && t.scaleX !== t.scaleY) set({ scaleY: t.scaleX }, true);
-          }}
-        />
-      </Row>
-      <SliderField label="Rotation °" value={t.rotation} min={-180} max={180} step={0.5} onChange={(v, c) => set({ rotation: v }, c)} />
-      <SliderField label="Opacity %" value={t.opacity} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ opacity: v }, c)} />
-      <SliderField label="Anchor X %" value={t.anchorX} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorX: v }, c)} />
-      <SliderField label="Anchor Y %" value={t.anchorY} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorY: v }, c)} />
+      {!scaleAnimated && (
+        <Row label="Uniform">
+          <Toggle
+            label="Uniform scale"
+            checked={uniform}
+            onChange={(on) => {
+              setUniform(on);
+              if (on && base.scaleX !== base.scaleY) set({ scaleY: base.scaleX }, true);
+            }}
+          />
+        </Row>
+      )}
+      <SliderField label="Rotation °" value={tr.rotation} min={-180} max={180} step={0.5} keyframe={kf('rotation')} onChange={(v, c) => anim('rotation', v, c)} />
+      <SliderField label="Opacity %" value={tr.opacity} min={0} max={1} step={0.01} display={pct} parse={fromPct} keyframe={kf('opacity')} onChange={(v, c) => anim('opacity', v, c)} />
+      <SliderField label="Anchor X %" value={base.anchorX} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorX: v }, c)} />
+      <SliderField label="Anchor Y %" value={base.anchorY} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorY: v }, c)} />
+      {!inside && <p className="text-[11px] leading-snug text-muted">Move the playhead over this clip to add keyframes.</p>}
     </Section>
+  );
+}
+
+const EASINGS: Array<{ value: Easing; label: string }> = [
+  { value: 'linear', label: 'Linear' },
+  { value: 'easeIn', label: 'Ease In' },
+  { value: 'easeOut', label: 'Ease Out' },
+  { value: 'easeInOut', label: 'Ease In/Out' },
+];
+
+function AnimationSection({ clip }: { clip: Clip }) {
+  const patch = usePatch(clip.id);
+  const { lt } = useClipTime(clip);
+  const times = keyframeTimes(clip);
+  if (!times.length)
+    return (
+      <Section title="Animation">
+        <p className="text-[11px] leading-snug text-muted">
+          Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at
+          another time to animate.
+        </p>
+      </Section>
+    );
+  const atKf = times.find((t) => Math.abs(t - lt) < KF_EPS);
+  const prev = [...times].reverse().find((t) => t < lt - KF_EPS);
+  const next = times.find((t) => t > lt + KF_EPS);
+  const easingAt =
+    atKf !== undefined
+      ? ANIM_PROPS.map((p) => clip.keyframes?.[p]?.find((k) => Math.abs(k.t - atKf) < KF_EPS)?.ease).find(Boolean) ?? 'linear'
+      : null;
+  const seekLocal = (t: number) => engine.seek(clip.start + Math.min(Math.max(0, t), clip.duration - 1e-3));
+  return (
+    <Section title={`Animation · ${times.length} keyframe${times.length === 1 ? '' : 's'}`}>
+      <div className="flex gap-2">
+        <button className="field flex-1 text-[12px] disabled:opacity-40" disabled={prev === undefined} onClick={() => seekLocal(prev!)}>
+          ◂ Previous
+        </button>
+        <button className="field flex-1 text-[12px] disabled:opacity-40" disabled={next === undefined} onClick={() => seekLocal(next!)}>
+          Next ▸
+        </button>
+      </div>
+      <Row label="Easing">
+        <select
+          className="field w-full"
+          aria-label="Keyframe easing"
+          disabled={atKf === undefined}
+          value={easingAt ?? 'linear'}
+          onChange={(e) => patch((c) => setEasingAt(c, atKf!, e.target.value as Easing))}
+        >
+          {EASINGS.map((e) => (
+            <option key={e.value} value={e.value}>
+              {e.label}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {atKf === undefined && <p className="text-[11px] text-muted">Easing applies from the keyframe at the playhead.</p>}
+      <button className="mt-1 text-[12px] text-danger" onClick={() => patch((c) => clearAnimation(c))}>
+        Remove all keyframes
+      </button>
+    </Section>
+  );
+}
+
+function TransitionInSection({ clip }: { clip: Clip }) {
+  const project = useProjectStore((s) => s.project);
+  const prev = prevAdjacent(project, clip);
+  const track = project.tracks.find((t) => t.id === clip.trackId);
+  if (!prev || !track || track.kind === 'audio') return null;
+  return (
+    <Section title="Transition in">
+      <button className="field w-full text-[12px]" onClick={() => addTransition(clip.id)}>
+        {clip.transitionIn ? 'Edit transition from previous clip' : 'Add transition from previous clip'}
+      </button>
+    </Section>
+  );
+}
+
+function TransitionInspector({ clipId }: { clipId: string }) {
+  const project = useProjectStore((s) => s.project);
+  const clip = project.clips[clipId];
+  const patch = usePatch(clipId);
+  const tr = clip?.transitionIn;
+  const prev = clip ? prevAdjacent(project, clip) : null;
+  if (!clip || !tr) return null;
+  const max = prev ? maxTransitionDuration(prev, clip) : tr.duration;
+  const set = (p: Partial<Transition>, commit = true) =>
+    patch((c) => ({ ...c, transitionIn: { ...(c.transitionIn as Transition), ...p } }), commit);
+  return (
+    <>
+      <div className="border-b border-line/70 px-3 py-2.5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">Transition</div>
+        <div className="text-[13px] font-medium">{TRANSITION_TYPES.find((x) => x.value === tr.type)?.label}</div>
+        {!prev && <div className="text-[11px] text-danger">Inactive: the clips no longer touch.</div>}
+      </div>
+      <Section title="Settings">
+        <Row label="Type">
+          <select className="field w-full" aria-label="Transition type" value={tr.type} onChange={(e) => set({ type: e.target.value as TransitionType })}>
+            {TRANSITION_TYPES.map((x) => (
+              <option key={x.value} value={x.value}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <SliderField
+          label="Duration s"
+          value={Math.min(tr.duration, max)}
+          min={0.1}
+          max={Math.max(0.1, Math.min(4, max))}
+          step={0.05}
+          onChange={(v, c) => set({ duration: v }, c)}
+        />
+        {tr.type === 'slide' && (
+          <Row label="Direction">
+            <Segmented<Direction>
+              label="Direction"
+              value={tr.direction}
+              options={[
+                { value: 'left', label: '←' },
+                { value: 'right', label: '→' },
+                { value: 'up', label: '↑' },
+                { value: 'down', label: '↓' },
+              ]}
+              onChange={(v) => set({ direction: v })}
+            />
+          </Row>
+        )}
+        <Row label="Easing">
+          <select className="field w-full" aria-label="Transition easing" value={tr.easing} onChange={(e) => set({ easing: e.target.value as Easing })}>
+            {EASINGS.map((e) => (
+              <option key={e.value} value={e.value}>
+                {e.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <button className="mt-1 text-[12px] text-danger" onClick={() => removeTransition(clipId)}>
+          Remove transition (cut)
+        </button>
+      </Section>
+    </>
   );
 }
 
@@ -359,15 +544,19 @@ function ProjectInspector() {
 
 export function Inspector({ onClose }: { onClose?: () => void }) {
   const clip = useProjectStore((s) => (s.selectedClipId ? s.project.clips[s.selectedClipId] : null));
+  const transitionId = useProjectStore((s) => s.selectedTransitionId);
   const asset = useMediaStore((s) => (clip?.type === 'media' ? s.assets[clip.assetId] : undefined));
 
   let body;
-  if (!clip) body = <ProjectInspector />;
+  if (transitionId) body = <TransitionInspector clipId={transitionId} />;
+  else if (!clip) body = <ProjectInspector />;
   else if (clip.type === 'text')
     body = (
       <>
         <TextSection clip={clip} />
         <TransformSection key={clip.id} clip={clip} />
+        <AnimationSection clip={clip} />
+        <TransitionInSection clip={clip} />
         <EffectsSection clip={clip} />
       </>
     );
@@ -383,6 +572,8 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
     body = (
       <>
         <TransformSection key={clip.id} clip={clip} />
+        <AnimationSection clip={clip} />
+        <TransitionInSection clip={clip} />
         <CropSection clip={clip} />
         {asset.kind === 'video' && <SpeedSection clip={clip} />}
         <EffectsSection clip={clip} />

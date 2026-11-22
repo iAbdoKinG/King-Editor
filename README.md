@@ -10,6 +10,7 @@ npm test           # unit tests (timeline ops, audio envelopes)
 # end-to-end smoke test (needs Playwright + ffmpeg-generated media, see script header)
 npm run build && npx vite preview --port 4173 &
 node scripts/e2e.cjs <media-dir> <screenshot-dir>
+node scripts/e2e-m456.cjs <media-dir> <out-dir>   # keyframes, transitions, export (+ ffprobe)
 ```
 
 ## Architecture
@@ -26,6 +27,9 @@ src/
     audio/audioGraph.ts   Web Audio routing (per-element gain + pan → master), fades
     rendering/compositor.ts Canvas 2D compositor (shared by preview and future export)
     rendering/geometry.ts transform maths shared by drawing, handles and hit-testing
+    timeline/animation.ts keyframes + easing (unit tested)
+    timeline/transitions.ts transition windows, layer mixes (alpha/offset/scale/audio)
+  features/export/exporter.ts  offline renderer: sequential WebCodecs decode → compositor → encoder (lazy-loaded)
   stores/                 Zustand: project (+ snapshot undo/redo with transactions), media, UI
   features/               UI by domain: media, preview, timeline, inspector, export
   components/ hooks/ app/ shell, icons, layout detection, shortcuts, PWA registration
@@ -58,14 +62,15 @@ Keyboard: Space/K play · ←/→ frame · ⇧←/→ 1 s · S or ⌘B split · 
 | 1 Foundation: Vite/React/TS/Tailwind, tokens, branding, responsive layouts, PWA | done |
 | 2 Media workspace: import, metadata, thumbnails, preview, transport, cleanup | done |
 | 3 Timeline: tracks, select, move, trim, split, delete, duplicate, zoom, scroll, snapping, undo/redo | done |
-| 4 Transform & audio: numeric + direct-manipulation transforms, crop, multitrack audio, volume/pan/fades, speed | mostly done (keyframes pending) |
-| 5 Effects & transitions | effects done (brightness/contrast/saturation/blur where canvas filters are supported); transitions and keyframes **not started** |
-| 6 Export | **not implemented**. The dialog only reports the device's real encoder capabilities. |
+| 4 Transform & audio: numeric + direct-manipulation transforms, crop, multitrack audio, volume/pan/fades, speed, **keyframes** (position/scale/rotation/opacity, linear/ease in/out/in-out, auto-key, split/trim-safe) | done |
+| 5 Effects & transitions: brightness/contrast/saturation/blur; **Cross Dissolve, Fade, Slide (4 directions), Zoom** centred on cuts, with duration/easing and audio crossfade | done |
+| 6 Export: offline, frame-accurate WebCodecs render → MP4 (H.264/HEVC + AAC/Opus) or WebM fallback, 720p/1080p, 24–60 fps, progress, cancel, file verified by re-parsing before success, Download / Share | done (needs real iPad validation) |
 | 7 Optimisation | basic instrumentation (perf stats toggle in Project inspector); device profiling pending |
 
 ## Known limitations
 
-- **No export yet.** The Export dialog is honest about this.
+- **Export needs WebCodecs** (Safari 16.4+/iPadOS 16.4+, current Chrome/Edge). Audio uses AAC where the browser can encode it, otherwise Opus. 4K is not offered yet. The audio mix is rendered in memory (about 23 MB per minute).
+- Keyframes cover position, scale, rotation and opacity. Effects and volume are not animatable yet.
 - **Effects need canvas `filter` support.** Safari releases older than 18 do not have it, so the controls are disabled there and the UI says so.
 - **No audio waveforms.** Decoding whole files would break the "don't load large files into memory" rule.
 - Codec support is whatever the browser supports. For example, HEVC `.mov` works in Safari but not in Chromium, and files that cannot be decoded are marked with an error.

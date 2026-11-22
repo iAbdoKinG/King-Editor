@@ -1,11 +1,13 @@
 /**
  * Canvas 2D compositor. Draws the timeline composition at time `t`.
- * The same function is used for preview (and later, export) so both always
- * use identical transform and effect parameters.
+ * Preview and export call this same function, so both always apply
+ * identical transforms, keyframes, effects and transitions.
  */
-import type { Clip, Effects, MediaAsset, Project, TextClip } from '../../types/project';
+import type { Effects, MediaAsset, Project, TextClip } from '../../types/project';
+import { resolveTransform } from '../timeline/animation';
 import { frameSize } from '../timeline/model';
-import { clipBox, fitContain, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD } from './geometry';
+import { trackLayersAt, type Layer } from '../timeline/transitions';
+import { clipBox, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD } from './geometry';
 import { imageCache } from './imageCache';
 
 export const canvasFilterSupported: boolean = (() => {
@@ -20,8 +22,23 @@ export const canvasFilterSupported: boolean = (() => {
   }
 })();
 
+/** A decoded frame that can draw a source sub-rectangle into a destination rectangle. */
+export interface Frame {
+  w: number;
+  h: number;
+  draw(ctx: CanvasRenderingContext2D, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+}
+
 export interface FrameSource {
-  getElement(clipId: string): HTMLVideoElement | HTMLAudioElement | null;
+  getFrame(clipId: string): Frame | null;
+}
+
+export function imageFrame(img: CanvasImageSource, w: number, h: number): Frame {
+  return {
+    w,
+    h,
+    draw: (ctx, sx, sy, sw, sh, dx, dy, dw, dh) => ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh),
+  };
 }
 
 function filterString(e: Effects, pxScale: number): string {
@@ -33,24 +50,21 @@ function filterString(e: Effects, pxScale: number): string {
   return parts.length ? parts.join(' ') : 'none';
 }
 
-/** Visual clips active at `t`, bottom layer first. */
-export function visibleClipsAt(project: Project, assets: Record<string, MediaAsset>, t: number): Clip[] {
-  const byTrack = new Map<string, Clip>();
-  for (const id in project.clips) {
-    const c = project.clips[id];
-    if (t < c.start || t >= c.start + c.duration) continue;
-    if (c.type === 'media') {
-      const a = assets[c.assetId];
-      if (!a || a.kind === 'audio') continue;
-    }
-    byTrack.set(c.trackId, c);
-  }
-  const out: Clip[] = [];
+/** Visual layers at `t`, bottom first (lower tracks first, then outgoing before incoming). */
+export function visibleLayersAt(project: Project, assets: Record<string, MediaAsset>, t: number): Layer[] {
+  const { width: W, height: H } = frameSize(project.settings);
+  const out: Layer[] = [];
   for (let i = project.tracks.length - 1; i >= 0; i--) {
     const tr = project.tracks[i];
     if (tr.kind === 'audio' || tr.hidden) continue;
-    const c = byTrack.get(tr.id);
-    if (c) out.push(c);
+    for (const l of trackLayersAt(project, tr.id, t, W, H)) {
+      const c = l.clip;
+      if (c.type === 'media') {
+        const a = assets[c.assetId];
+        if (!a || a.kind === 'audio') continue;
+      }
+      out.push(l);
+    }
   }
   return out;
 }
@@ -73,61 +87,53 @@ export function renderFrame(ctx: CanvasRenderingContext2D, opts: RenderOptions):
   ctx.fillStyle = project.settings.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (const clip of visibleClipsAt(project, assets, t)) {
-    const box = clipBox(clip, assets, W, H);
+  for (const { clip, mix } of visibleLayersAt(project, assets, t)) {
+    const tr = resolveTransform(clip, t - clip.start);
+    const box = clipBox(clip, assets, W, H, tr);
     if (!box) continue;
-    const tr = clip.transform;
-    if (tr.opacity <= 0) continue;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
+    const alpha = Math.min(1, tr.opacity) * mix.alpha;
+    if (alpha <= 0.001) continue;
+    // Transition transform (around the frame centre), then the clip transform.
+    const ms = mix.scale;
+    ctx.setTransform(k * ms, 0, 0, k * ms, k * ((W / 2) * (1 - ms) + mix.dx), k * ((H / 2) * (1 - ms) + mix.dy));
     ctx.translate(box.cx, box.cy);
     ctx.rotate(box.rot);
     ctx.scale(box.sx, box.sy);
-    ctx.globalAlpha = Math.min(1, tr.opacity);
-    if (canvasFilterSupported) ctx.filter = filterString(clip.effects, k * Math.abs(box.sx));
+    ctx.globalAlpha = alpha;
+    if (canvasFilterSupported) ctx.filter = filterString(clip.effects, k * ms * Math.abs(box.sx));
     const x0 = -box.w * box.ax;
     const y0 = -box.h * box.ay;
 
     if (clip.type === 'text') {
       drawText(ctx, clip, x0, y0);
-    } else {
-      const a = assets[clip.assetId];
-      let img: CanvasImageSource | null = null;
-      let sw = a.width;
-      let sh = a.height;
-      if (a.kind === 'image') img = imageCache.get(a);
-      else {
-        const el = source.getElement(clip.id) as HTMLVideoElement | null;
-        if (el && el.readyState >= 2 && el.videoWidth > 0) {
-          img = el;
-          sw = el.videoWidth;
-          sh = el.videoHeight;
-        }
-      }
+      continue;
+    }
+    const a = assets[clip.assetId];
+    let frame: Frame | null = null;
+    if (a.kind === 'image') {
+      const img = imageCache.get(a);
       if (img) {
-        if (img instanceof HTMLImageElement) {
-          sw = img.naturalWidth;
-          sh = img.naturalHeight;
-        } else if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) {
-          sw = img.width;
-          sh = img.height;
-        }
-        const c = tr.crop;
-        try {
-          ctx.drawImage(
-            img,
-            sw * c.left,
-            sh * c.top,
-            Math.max(1, sw * (1 - c.left - c.right)),
-            Math.max(1, sh * (1 - c.top - c.bottom)),
-            x0,
-            y0,
-            box.w,
-            box.h,
-          );
-        } catch {
-          /* frame not decodable yet */
-        }
+        const w = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
+        const h = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
+        frame = imageFrame(img, w, h);
       }
+    } else frame = source.getFrame(clip.id);
+    if (!frame) continue;
+    const c = tr.crop;
+    try {
+      frame.draw(
+        ctx,
+        frame.w * c.left,
+        frame.h * c.top,
+        Math.max(1, frame.w * (1 - c.left - c.right)),
+        Math.max(1, frame.h * (1 - c.top - c.bottom)),
+        x0,
+        y0,
+        box.w,
+        box.h,
+      );
+    } catch {
+      /* frame not decodable yet */
     }
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -167,5 +173,3 @@ function drawText(ctx: CanvasRenderingContext2D, c: TextClip, x0: number, y0: nu
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 }
-
-export { fitContain };

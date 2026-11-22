@@ -7,6 +7,7 @@ import type { Clip, MediaAsset, Project, Track, TrackKind } from '../../types/pr
 import { uid } from '../../utils/id';
 import { clamp, quantize } from '../../utils/time';
 import { clipEnd, clipsOnTrack, createTrack, maxClipDuration } from './model';
+import { shiftKeyframes, splitKeyframes } from './animation';
 
 const EPS = 1e-6;
 
@@ -91,10 +92,11 @@ export function trimClip(
     const ns = clamp(quantize(time, fps), lower, end - minDur);
     if (Math.abs(ns - clip.start) < EPS) return project;
     const delta = ns - clip.start;
+    const keyframes = shiftKeyframes(clip.keyframes, -delta);
     const next: Clip =
       clip.type === 'media'
-        ? { ...clip, start: ns, duration: end - ns, in: Math.max(0, clip.in + delta * clip.speed) }
-        : { ...clip, start: ns, duration: end - ns };
+        ? { ...clip, start: ns, duration: end - ns, in: Math.max(0, clip.in + delta * clip.speed), keyframes }
+        : { ...clip, start: ns, duration: end - ns, keyframes };
     return withClip(project, next);
   }
   let upper = clip.start + maxClipDuration(clip, assets);
@@ -115,21 +117,24 @@ export function splitClip(project: Project, clipId: string, t: number): [Project
   const leftDur = at - clip.start;
   const rightDur = clipEnd(clip) - at;
   const rightId = uid('clp');
+  const [kl, kr] = splitKeyframes(clip.keyframes, leftDur);
   let left: Clip;
   let right: Clip;
   if (clip.type === 'media') {
-    left = { ...clip, duration: leftDur, audio: { ...clip.audio, fadeOut: 0 } };
+    left = { ...clip, duration: leftDur, keyframes: kl, audio: { ...clip.audio, fadeOut: 0 } };
     right = {
       ...clip,
       id: rightId,
       start: at,
       duration: rightDur,
+      keyframes: kr,
+      transitionIn: undefined,
       in: clip.in + leftDur * clip.speed,
       audio: { ...clip.audio, fadeIn: 0 },
     };
   } else {
-    left = { ...clip, duration: leftDur };
-    right = { ...clip, id: rightId, start: at, duration: rightDur };
+    left = { ...clip, duration: leftDur, keyframes: kl };
+    right = { ...clip, id: rightId, start: at, duration: rightDur, keyframes: kr, transitionIn: undefined };
   }
   return [{ ...project, clips: { ...project.clips, [left.id]: left, [right.id]: right } }, rightId];
 }

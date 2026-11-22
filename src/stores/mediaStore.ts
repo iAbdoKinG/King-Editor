@@ -14,6 +14,12 @@ interface MediaState {
   remove: (id: string) => void;
 }
 
+/** Original File objects, kept outside React state (needed for frame-accurate export decoding). */
+const fileStore = new Map<string, File>();
+export function getAssetFile(id: string): File | undefined {
+  return fileStore.get(id);
+}
+
 /** Hooks other modules register to free resources tied to an asset. */
 const releaseHooks: Array<(asset: MediaAsset) => void> = [];
 export function onAssetReleased(fn: (asset: MediaAsset) => void): void {
@@ -47,6 +53,7 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         height: 0,
         status: 'loading',
       };
+      fileStore.set(id, file);
       set((s) => ({ assets: { ...s.assets, [id]: asset }, order: [...s.order, id] }));
       added.push(id);
     }
@@ -82,6 +89,7 @@ export const useMediaStore = create<MediaState>((set, get) => ({
     if (!a) return;
     for (const fn of releaseHooks) fn(a);
     URL.revokeObjectURL(a.url);
+    fileStore.delete(id);
     if (a.thumbUrl) URL.revokeObjectURL(a.thumbUrl);
     set((s) => {
       const assets = { ...s.assets };

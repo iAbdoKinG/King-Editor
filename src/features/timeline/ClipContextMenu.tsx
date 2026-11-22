@@ -3,7 +3,8 @@ import { engine } from '../../engine/playback/engine';
 import { clipEnd } from '../../engine/timeline/model';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
-import { deleteSelected, duplicateSelected, moveSelectedToTrack, splitAtPlayhead } from './actions';
+import { addTransition, deleteSelected, duplicateSelected, moveSelectedToTrack, splitAtPlayhead } from './actions';
+import { prevAdjacent } from '../../engine/timeline/transitions';
 
 export function ClipContextMenu({ compact }: { compact: boolean }) {
   const menu = useUIStore((s) => s.contextMenu);
@@ -12,6 +13,9 @@ export function ClipContextMenu({ compact }: { compact: boolean }) {
   if (!menu || !clip) return null;
   const t = engine.clock.now();
   const canSplit = t > clip.start && t < clipEnd(clip);
+  const project = useProjectStore.getState().project;
+  const visualTrack = project.tracks.find((tr) => tr.id === clip.trackId)?.kind !== 'audio';
+  const canTransition = visualTrack && !!prevAdjacent(project, clip);
   return (
     <Menu
       x={menu.x}
@@ -21,6 +25,9 @@ export function ClipContextMenu({ compact }: { compact: boolean }) {
       items={[
         { label: 'Split at playhead', hint: 'S', disabled: !canSplit, onSelect: splitAtPlayhead },
         { label: 'Duplicate', hint: '⌘D', onSelect: duplicateSelected },
+        ...(canTransition
+          ? [{ label: clip.transitionIn ? 'Edit transition in' : 'Add transition in', onSelect: () => addTransition(clip.id) }]
+          : []),
         { label: 'Move to track above', onSelect: () => moveSelectedToTrack(-1) },
         { label: 'Move to track below', onSelect: () => moveSelectedToTrack(1) },
         { label: 'Jump playhead to clip', onSelect: () => engine.seek(clip.start) },

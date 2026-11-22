@@ -11,6 +11,9 @@
 import type { MediaAsset, MediaClip, Project } from '../../types/project';
 import { audioGraph, fadeEnvelope } from '../audio/audioGraph';
 import { clamp } from '../../utils/time';
+import { imageFrame, type Frame } from '../rendering/compositor';
+import { frameSize } from '../timeline/model';
+import { allMixesAt, clipRange } from '../timeline/transitions';
 
 type Kind = 'video' | 'audio';
 
@@ -123,6 +126,12 @@ export class MediaPool {
     return this.byClip.get(clipId)?.el ?? null;
   }
 
+  getFrame(clipId: string): Frame | null {
+    const el = this.byClip.get(clipId)?.el;
+    if (!(el instanceof HTMLVideoElement) || el.readyState < 2 || !el.videoWidth) return null;
+    return imageFrame(el, el.videoWidth, el.videoHeight);
+  }
+
   private seekSlot(slot: Slot, t: number): void {
     if (slot.seeking) {
       slot.pendingSeek = t;
@@ -181,16 +190,16 @@ export class MediaPool {
     const now = performance.now();
     const trackById = new Map(project.tracks.map((tr) => [tr.id, tr]));
     // 1. Decide which clips need an element, nearest first.
-    const wanted: Array<{ clip: MediaClip; asset: MediaAsset; dist: number }> = [];
+    const wanted: Array<{ clip: MediaClip; asset: MediaAsset; dist: number; range: [number, number] }> = [];
     const pre = playing ? PRELOAD : 0.25;
     for (const id in project.clips) {
       const c = project.clips[id];
       if (c.type !== 'media') continue;
       const a = assets[c.assetId];
       if (!a || a.status !== 'ready' || a.kind === 'image') continue;
-      const end = c.start + c.duration;
-      if (t < c.start - pre || t >= end + 0.05) continue;
-      wanted.push({ clip: c, asset: a, dist: Math.max(0, c.start - t) });
+      const range = clipRange(project, c);
+      if (t < range[0] - pre || t >= range[1] + 0.05) continue;
+      wanted.push({ clip: c, asset: a, dist: Math.max(0, range[0] - t), range });
     }
     wanted.sort((x, y) => x.dist - y.dist);
     const wantedIds = new Set(wanted.map((w) => w.clip.id));
@@ -215,6 +224,8 @@ export class MediaPool {
     // 4. Drive each element from the clock.
     let stalled = false;
     const graph = audioGraph.ready;
+    const { width: W, height: H } = frameSize(project.settings);
+    const mixes = allMixesAt(project, t, W, H);
     for (const w of wanted) {
       const slot = this.byClip.get(w.clip.id);
       if (!slot) continue;
@@ -222,9 +233,10 @@ export class MediaPool {
       const { clip, asset } = w;
       const el = slot.el;
       const track = trackById.get(clip.trackId);
-      const active = t >= clip.start && t < clip.start + clip.duration;
+      const active = t >= w.range[0] && t < w.range[1];
       const srcDur = isFinite(el.duration) && el.duration > 0 ? el.duration : asset.duration;
-      const desired = clamp(clip.in + (active ? (t - clip.start) * clip.speed : 0), 0, Math.max(0, srcDur - 0.02));
+      const local = active ? t - clip.start : w.range[0] - clip.start;
+      const desired = clamp(clip.in + local * clip.speed, 0, Math.max(0, srcDur - 0.02));
 
       if (playing && active) {
         if (el.playbackRate !== clip.speed) el.playbackRate = clip.speed;
@@ -255,9 +267,12 @@ export class MediaPool {
       }
 
       // Audio level for this element.
-      const silent = !active || !playing || !track || track.muted;
+      const mix = mixes.get(clip.id);
+      const silent = !mix || !playing || !track || track.muted;
       const lt = t - clip.start;
-      const level = silent ? 0 : clip.audio.volume * fadeEnvelope(lt, clip.duration, clip.audio.fadeIn, clip.audio.fadeOut);
+      const level = silent
+        ? 0
+        : clip.audio.volume * mix.audio * fadeEnvelope(clamp(lt, 0, clip.duration), clip.duration, clip.audio.fadeIn, clip.audio.fadeOut);
       if (graph) {
         const nodes = audioGraph.attach(el);
         if (nodes) {

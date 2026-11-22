@@ -7,9 +7,10 @@
  * renders per frame.
  */
 import { useEffect, useRef } from 'react';
-import type { Clip, Project } from '../../types/project';
+import type { AnimProp, Clip, Project, Transform } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
-import { visibleClipsAt } from '../../engine/rendering/compositor';
+import { visibleLayersAt } from '../../engine/rendering/compositor';
+import { resolveTransform, setAnimatedValue } from '../../engine/timeline/animation';
 import { boxCorners, clipBox, hitBox, type Point } from '../../engine/rendering/geometry';
 import { frameSize } from '../../engine/timeline/model';
 import { updateClip } from '../../engine/timeline/ops';
@@ -22,7 +23,8 @@ interface Gesture {
   mode: Mode;
   clipId: string;
   start: Point; // project px
-  orig: Clip['transform'];
+  orig: Transform;
+  lt: number;
   anchor: Point;
   d0: number;
   a0: number;
@@ -66,8 +68,11 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       if (!svg) return;
       const { project } = useProjectStore.getState();
       const assets = useMediaStore.getState().assets;
-      const clip = activeSelected(project, engine.clock.now());
-      const box = clip ? clipBox(clip, assets, frameSize(project.settings).width, frameSize(project.settings).height) : null;
+      const t = engine.clock.now();
+      const clip = activeSelected(project, t);
+      const box = clip
+        ? clipBox(clip, assets, frameSize(project.settings).width, frameSize(project.settings).height, resolveTransform(clip, t - clip.start))
+        : null;
       const show = !!box && !engine.clock.playing;
       svg.style.visibility = show ? 'visible' : 'hidden';
       if (!box || !show) return;
@@ -132,13 +137,15 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       if (!sel) return;
       if (gesture.current?.moved) ps.cancel();
       const [a, b] = [...pointers.current.values()];
-      const box = clipBox(sel, assets, W, H)!;
+      const orig = resolveTransform(sel, t - sel.start);
+      const box = clipBox(sel, assets, W, H, orig)!;
       ps.begin();
       gesture.current = {
         mode: 'pinch',
         clipId: sel.id,
         start: p,
-        orig: sel.transform,
+        orig,
+        lt: t - sel.start,
         anchor: { x: box.cx, y: box.cy },
         d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
         a0: Math.atan2(b.y - a.y, b.x - a.x),
@@ -150,12 +157,14 @@ export function TransformOverlay({ width, height }: { width: number; height: num
     const handle = (e.target as Element).getAttribute?.('data-handle') as 'scale' | 'rotate' | null;
     let clip = activeSelected(ps.project, t);
     if (!handle) {
-      const box = clip ? clipBox(clip, assets, W, H) : null;
+      const box = clip ? clipBox(clip, assets, W, H, resolveTransform(clip, t - clip.start)) : null;
       if (!box || !hitBox(box, p)) {
         // Select the top-most element under the pointer.
-        const stack = visibleClipsAt(ps.project, assets, t).reverse();
+        const stack = visibleLayersAt(ps.project, assets, t)
+          .map((l) => l.clip)
+          .reverse();
         clip = stack.find((c) => {
-          const b = clipBox(c, assets, W, H);
+          const b = clipBox(c, assets, W, H, resolveTransform(c, t - c.start));
           return b && hitBox(b, p);
         }) ?? null;
         ps.select(clip?.id ?? null);
@@ -165,12 +174,14 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       gesture.current = null;
       return;
     }
-    const box = clipBox(clip, assets, W, H)!;
+    const orig = resolveTransform(clip, t - clip.start);
+    const box = clipBox(clip, assets, W, H, orig)!;
     gesture.current = {
       mode: handle ?? 'move',
       clipId: clip.id,
       start: p,
-      orig: clip.transform,
+      orig,
+      lt: t - clip.start,
       anchor: { x: box.cx, y: box.cy },
       d0: Math.hypot(p.x - box.cx, p.y - box.cy) || 1,
       a0: Math.atan2(p.y - box.cy, p.x - box.cx),
@@ -187,14 +198,14 @@ export function TransformOverlay({ width, height }: { width: number; height: num
     if (!g) return;
     const ps = useProjectStore.getState();
     const o = g.orig;
-    let next: Clip['transform'] | null = null;
+    let next: Partial<Record<AnimProp, number>> | null = null;
 
     if (g.mode === 'pinch') {
       if (pointers.current.size < 2) return;
       const [a, b] = [...pointers.current.values()];
       const k = Math.hypot(a.x - b.x, a.y - b.y) / g.d0;
       const da = Math.atan2(b.y - a.y, b.x - a.x) - g.a0;
-      next = { ...o, scaleX: clampScale(o.scaleX * k), scaleY: clampScale(o.scaleY * k), rotation: round1(o.rotation + (da * 180) / Math.PI) };
+      next = { scale: clampScale(o.scaleX * k), rotation: round1(o.rotation + (da * 180) / Math.PI) };
     } else {
       const { width: W } = frameSize(ps.project.settings);
       const slop = (4 / sizeRef.current.width) * W;
@@ -210,21 +221,29 @@ export function TransformOverlay({ width, height }: { width: number; height: num
         const snap = (8 / sizeRef.current.width) * W;
         if (Math.abs(x) < snap) x = 0;
         if (Math.abs(y) < snap) y = 0;
-        next = { ...o, x: Math.round(x), y: Math.round(y) };
+        next = { x: Math.round(x), y: Math.round(y) };
       } else if (g.mode === 'scale') {
         const k = Math.hypot(p.x - g.anchor.x, p.y - g.anchor.y) / g.d0;
-        next = { ...o, scaleX: clampScale(o.scaleX * k), scaleY: clampScale(o.scaleY * k) };
+        next = { scale: clampScale(o.scaleX * k) };
       } else if (g.mode === 'rotate') {
         const a = Math.atan2(p.y - g.anchor.y, p.x - g.anchor.x);
         let deg = o.rotation + ((a - g.a0) * 180) / Math.PI;
         const nearest = Math.round(deg / 45) * 45;
         if (Math.abs(deg - nearest) < 3) deg = nearest;
-        next = { ...o, rotation: round1(deg) };
+        next = { rotation: round1(deg) };
       }
     }
     if (next) {
-      const t = next;
-      ps.apply((proj) => updateClip(proj, g.clipId, (c) => ({ ...c, transform: t }) as Clip), { commit: false });
+      const vals = next;
+      ps.apply(
+        (proj) =>
+          updateClip(proj, g.clipId, (c) => {
+            let out = c;
+            for (const prop of Object.keys(vals) as AnimProp[]) out = setAnimatedValue(out, prop, g.lt, vals[prop]!);
+            return out;
+          }),
+        { commit: false },
+      );
     }
   };
 

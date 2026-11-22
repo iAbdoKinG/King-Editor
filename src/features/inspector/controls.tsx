@@ -37,6 +37,7 @@ export function SliderField({
   parse = (s: string) => parseFloat(s),
   onChange,
   disabled,
+  keyframe,
 }: {
   label: string;
   value: number;
@@ -48,6 +49,8 @@ export function SliderField({
   parse?: (s: string) => number;
   onChange: (v: number, commit: boolean) => void;
   disabled?: boolean;
+  /** Keyframe toggle: `on` = keyframe at playhead, `animated` = property has keyframes. */
+  keyframe?: { on: boolean; animated: boolean; disabled?: boolean; onToggle: () => void };
 }) {
   const dragging = useRef(false);
   const [text, setText] = useState(display(value));
@@ -70,8 +73,26 @@ export function SliderField({
   };
 
   return (
-    <div className={`grid grid-cols-[76px_1fr_64px] items-center gap-2 ${disabled ? 'opacity-40' : ''}`}>
-      <label className="truncate text-[12px] text-muted">{label}</label>
+    <div
+      className={`grid items-center gap-2 ${keyframe ? 'grid-cols-[24px_64px_1fr_60px]' : 'grid-cols-[76px_1fr_64px]'} ${disabled ? 'opacity-40' : ''}`}
+    >
+      {keyframe && (
+        <button
+          className="flex h-8 w-6 items-center justify-center disabled:opacity-30"
+          aria-label={`${keyframe.on ? 'Remove' : 'Add'} ${label} keyframe`}
+          aria-pressed={keyframe.on}
+          disabled={keyframe.disabled}
+          onClick={keyframe.onToggle}
+          title={keyframe.on ? 'Remove keyframe' : 'Add keyframe at playhead'}
+        >
+          <span
+            className={`block h-[9px] w-[9px] rotate-45 border ${
+              keyframe.on ? 'border-accent bg-accent' : keyframe.animated ? 'border-accent bg-transparent' : 'border-muted bg-transparent'
+            }`}
+          />
+        </button>
+      )}
+      <label className={`truncate text-[12px] ${keyframe?.animated ? 'text-accent' : 'text-muted'}`}>{label}</label>
       <input
         type="range"
         className="range"
