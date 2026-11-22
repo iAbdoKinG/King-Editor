@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter/index.css';
+
+@theme {
+  --color-bg: #15191d;
+  --color-surface: #22282e;
+  --color-elevated: #2c343b;
+  --color-accent: #91c1c5;
+  --color-accent-strong: #a9d3d6;
+  --color-text: #f2f4f5;
+  --color-muted: #9caab1;
+  --color-line: #39434a;
+  --color-danger: #e0817a;
+  --color-video: #4f7477;
+  --color-audio: #5a6f52;
+  --color-text-clip: #7a6a52;
+  --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+    /* The editor is an application surface, not a document. */
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input,
+  textarea,
+  select {
+    -webkit-user-select: text;
+    user-select: text;
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.38;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+}
+
+@layer components {
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  .panel {
+    background: var(--color-surface);
+    border-color: var(--color-line);
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: var(--color-muted);
+    transition: background-color 120ms, color 120ms;
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--color-elevated);
+    color: var(--color-text);
+  }
+  .icon-btn[aria-pressed='true'] {
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+  @media (pointer: coarse) {
+    .icon-btn {
+      min-width: 44px;
+      height: 44px;
+    }
+  }
+  .field {
+    background: var(--color-bg);
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    height: 32px;
+    padding: 0 8px;
+    min-width: 0;
+  }
+  .field:focus {
+    border-color: var(--color-accent);
+    outline: none;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Range input styled for touch: large thumb, slim track. */
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    background: transparent;
+    touch-action: pan-y;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-line);
+  }
+  .range::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-line);
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    margin-top: -7px;
+    border-radius: 50%;
+    background: var(--color-text);
+    border: 3px solid var(--color-bg);
+    box-shadow: 0 0 0 1px var(--color-line);
+  }
+  .range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--color-text);
+    border: 3px solid var(--color-bg);
+  }
+  @media (pointer: coarse) {
+    .range::-webkit-slider-thumb {
+      width: 24px;
+      height: 24px;
+      margin-top: -10px;
+    }
+  }
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}
+.sheet-in {
+  animation: sheet-in 160ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in {
+    animation: none;
+  }
+}
