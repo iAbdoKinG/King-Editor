@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { t as T } from '../i18n';
 import { createPortal } from 'react-dom';
 
 export interface MenuItem {
@@ -51,11 +52,11 @@ export function Menu({
       <div
         ref={ref}
         role="menu"
-        aria-label={title}
+        aria-label={title ? T(title) : undefined}
         className="sheet-in absolute min-w-[200px] overflow-hidden rounded-xl border border-line bg-elevated py-1 shadow-2xl shadow-black/50"
         style={pos}
       >
-        {title && <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</div>}
+        {title && <div className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">{T(title)}</div>}
         {items.map((it) => (
           <button
             key={it.label}
@@ -69,7 +70,7 @@ export function Menu({
               it.onSelect();
             }}
           >
-            <span>{it.label}</span>
+            <span>{T(it.label)}</span>
             {it.hint && <span className="text-[11px] text-muted">{it.hint}</span>}
           </button>
         ))}

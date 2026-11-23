@@ -8,6 +8,7 @@
  */
 import { create } from 'zustand';
 import type { MediaAsset } from '../../types/project';
+import { dataSize, makeSource, readAll, type AssetData } from './assetSource';
 
 export const PEAKS_PER_SEC = 60;
 /** Peak level below which audio is considered silent (≈ −34 dBFS). */
@@ -34,9 +35,9 @@ const cancelled = new Set<string>();
 
 const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
 
-async function computeStreaming(file: File, duration: number, id: string): Promise<Float32Array | 'none' | null> {
-  const { ALL_FORMATS, AudioBufferSink, BlobSource, Input } = await import('mediabunny');
-  const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+async function computeStreaming(file: AssetData, duration: number, id: string): Promise<Float32Array | 'none' | null> {
+  const { ALL_FORMATS, AudioBufferSink, Input } = await import('mediabunny');
+  const input = new Input({ source: await makeSource(file), formats: ALL_FORMATS });
   try {
     const track = await input.getPrimaryAudioTrack();
     if (!track) return 'none';
@@ -66,13 +67,13 @@ async function computeStreaming(file: File, duration: number, id: string): Promi
   }
 }
 
-async function computeFallback(file: File, duration: number): Promise<Float32Array | null> {
+async function computeFallback(file: AssetData, duration: number, size: number): Promise<Float32Array | null> {
   // Whole-file decode: only for reasonably small files to protect memory.
-  if (file.size > 120 * 1024 * 1024) return null;
+  if (dataSize(file, size) > 120 * 1024 * 1024) return null;
   const Ctx = window.OfflineAudioContext ?? (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext;
   if (!Ctx) return null;
   const ctx = new Ctx(1, 1, 22050);
-  const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+  const buf = await ctx.decodeAudioData(await readAll(file));
   const peaks = new Float32Array(Math.max(1, Math.ceil(duration * PEAKS_PER_SEC)));
   const per = buf.sampleRate / PEAKS_PER_SEC;
   for (let c = 0; c < buf.numberOfChannels; c++) {
@@ -87,7 +88,7 @@ async function computeFallback(file: File, duration: number): Promise<Float32Arr
 }
 
 /** Queue waveform analysis for an asset (no-op for images). */
-export function requestWaveform(asset: MediaAsset, file: File): void {
+export function requestWaveform(asset: MediaAsset, file: AssetData): void {
   if (asset.kind === 'image' || useWaveformStore.getState().waves[asset.id]) return;
   setWave(asset.id, { status: 'pending' });
   queue = queue.then(async () => {
@@ -100,7 +101,7 @@ export function requestWaveform(asset: MediaAsset, file: File): void {
     }
     if (result === null && !cancelled.has(asset.id)) {
       try {
-        result = await computeFallback(file, asset.duration);
+        result = await computeFallback(file, asset.duration, asset.size);
       } catch {
         // Video files often have no decodable audio via Web Audio.
         result = asset.kind === 'video' ? 'none' : null;

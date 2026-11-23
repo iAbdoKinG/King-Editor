@@ -39,6 +39,8 @@ const P: Record<string, string> = {
   wand: 'M15 4V2M15 10V8M11 6H9M21 6h-2M17.8 8.8 19 10M17.8 3.2 19 2M12.2 3.2 11 2M3 21l9-9M14 6l1 1',
   flipH: 'M12 3v18M8 7l-5 5 5 5zM16 7l5 5-5 5z',
   flipV: 'M3 12h18M7 8l5-5 5 5zM7 16l5 5 5-5z',
+  save: 'M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7',
+  windows: 'M3 5.5 10.5 4.5v7H3zM12 4.3 21 3v8.5h-9zM3 12.5h7.5v7L3 18.5zM12 12.5h9V21l-9-1.3z',
   layers: 'M12 3 2 8l10 5 10-5zM2 13l10 5 10-5',
   ripple: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M21 17h-3',
 };

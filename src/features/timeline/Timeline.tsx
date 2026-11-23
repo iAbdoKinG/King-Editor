@@ -12,6 +12,7 @@
  * never triggers React renders.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { t as T } from '../../i18n';
 import type { Clip, Track } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
 import { clipEnd, projectDuration } from '../../engine/timeline/model';
@@ -491,7 +492,7 @@ export function Timeline({ compact }: { compact: boolean }) {
   const visTo = (view.left + view.width * 2) / pps + 2;
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1" dir="ltr">
       {markerEdit && <MarkerPopover id={markerEdit.id} x={markerEdit.x} y={markerEdit.y} onClose={() => setMarkerEdit(null)} />}
       {/* Track headers */}
       <div
@@ -543,8 +544,8 @@ export function Timeline({ compact }: { compact: boolean }) {
               <button
                 key={m.id}
                 data-marker-id={m.id}
-                aria-label={`Marker ${m.label || ''} at ${m.t.toFixed(2)} seconds`}
-                title={m.label || 'Marker'}
+                aria-label={T('Marker {label} at {t} seconds', { label: m.label || '', t: m.t.toFixed(2) })}
+                title={m.label || T('Marker')}
                 className="absolute top-0 z-10 flex h-full w-6 -translate-x-1/2 items-start justify-center"
                 style={{ left: m.t * pps }}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -602,7 +603,7 @@ export function Timeline({ compact }: { compact: boolean }) {
                         key={`tr-${c.id}`}
                         data-transition-for={c.id}
                         role="button"
-                        aria-label="Transition"
+                        aria-label={T("Transition")}
                         aria-pressed={sel}
                         className={`absolute top-[3px] z-[4] flex items-center justify-center rounded-[5px] border ${
                           sel ? 'border-accent bg-accent/35' : 'border-text/40 bg-black/35'
@@ -624,7 +625,7 @@ export function Timeline({ compact }: { compact: boolean }) {
                       key={`tr-${c.id}`}
                       data-transition-for={c.id}
                       role="button"
-                      aria-label="Add transition"
+                      aria-label={T("Add transition")}
                       className="absolute z-[4] flex h-7 w-7 -translate-x-1/2 items-center justify-center"
                       style={{ left: c.start * pps, top: (l.h - 28) / 2 }}
                     >
@@ -639,7 +640,7 @@ export function Timeline({ compact }: { compact: boolean }) {
 
           {project.tracks.length === 0 && (
             <div className="absolute left-4 text-muted" style={{ top: RULER_H + 16 }}>
-              No tracks. Add a track from the toolbar.
+              {T('No tracks. Add a track from the toolbar.')}
             </div>
           )}
 

@@ -4,6 +4,7 @@
  * field: presets are plain values only.
  */
 import { create } from 'zustand';
+import { t as T } from '../../i18n';
 import type { Easing, Effects, Keyframe, Keyframes, TextStyle, Transition } from '../../types/project';
 import type { ThemeColors } from '../../app/theme';
 import { defaultEffects } from '../../engine/timeline/model';
@@ -47,7 +48,7 @@ const str = (v: unknown, max: number, def: string) => (typeof v === 'string' ? v
 const oneOf = <T extends string>(v: unknown, list: readonly T[], def: T): T => (list.includes(v as T) ? (v as T) : def);
 const EASINGS = ['linear', 'easeIn', 'easeOut', 'easeInOut'] as const;
 
-function cleanEffects(d: Record<string, unknown>): Effects {
+export function cleanEffects(d: Record<string, unknown>): Effects {
   const e = defaultEffects();
   return {
     brightness: num(d.brightness, 0, 200, e.brightness),
@@ -61,7 +62,7 @@ function cleanEffects(d: Record<string, unknown>): Effects {
   };
 }
 
-function cleanTextStyle(d: Record<string, unknown>): TextStyle {
+export function cleanTextStyle(d: Record<string, unknown>): TextStyle {
   return {
     fontFamily: str(d.fontFamily, 80, 'Inter Variable').replace(/[^\p{L}\p{N} _-]/gu, ''),
     fontSize: num(d.fontSize, 8, 600, 96),
@@ -73,7 +74,7 @@ function cleanTextStyle(d: Record<string, unknown>): TextStyle {
   };
 }
 
-function cleanTransition(d: Record<string, unknown>): Transition {
+export function cleanTransition(d: Record<string, unknown>): Transition {
   return {
     type: oneOf(d.type, TRANSITION_TYPES.map((t) => t.value), 'dissolve'),
     duration: num(d.duration, 0.05, 4, 0.5),
@@ -82,7 +83,7 @@ function cleanTransition(d: Record<string, unknown>): Transition {
   };
 }
 
-function cleanAnimation(d: Record<string, unknown>): Keyframes {
+export function cleanAnimation(d: Record<string, unknown>): Keyframes {
   const out: Keyframes = {};
   for (const p of ANIM_PROPS) {
     const list = d[p];
@@ -181,12 +182,12 @@ export function parseBundle(text: string): Preset[] {
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error('This is not a KING EDITOR preset file.');
+    throw new Error(T('This is not a KING EDITOR preset file.'));
   }
   const b = raw as Partial<Bundle>;
-  if (!b || b.app !== 'king-editor' || !Array.isArray(b.presets)) throw new Error('This is not a KING EDITOR preset file.');
+  if (!b || b.app !== 'king-editor' || !Array.isArray(b.presets)) throw new Error(T('This is not a KING EDITOR preset file.'));
   const out = b.presets.slice(0, 200).map(sanitizePreset).filter((p): p is Preset => !!p);
-  if (!out.length) throw new Error('No valid presets found.');
+  if (!out.length) throw new Error(T('No valid presets found.'));
   return out;
 }
 

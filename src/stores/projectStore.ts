@@ -28,6 +28,8 @@ interface ProjectState {
   cancel: () => void;
   undo: () => void;
   redo: () => void;
+  /** Replace the whole project (open file / new project); clears history and selection. */
+  load: (project: Project) => void;
   select: (clipId: string | null) => void;
   selectTrack: (trackId: string | null) => void;
   selectTransition: (clipId: string | null) => void;
@@ -82,6 +84,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const next = future[0];
     set({ project: next, past: [...past, project], future: future.slice(1), ...validSelection(next, get()) });
   },
+
+  load: (project) => set({ project, past: [], future: [], txBase: null, selectedClipId: null, selectedTrackId: null, selectedTransitionId: null }),
 
   select: (clipId) => {
     const clip = clipId ? get().project.clips[clipId] : null;

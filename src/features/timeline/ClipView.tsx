@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { t as T } from '../../i18n';
 import type { Clip, MediaAsset, TrackKind } from '../../types/project';
 import { HANDLE_W } from './constants';
 import { keyframeTimes } from '../../engine/timeline/animation';
@@ -23,7 +24,7 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
   const left = clip.start * pps;
   const width = Math.max(3, clip.duration * pps);
   const missing = clip.type === 'media' && !asset;
-  const label = clip.type === 'text' ? clip.text.split('\n')[0] || 'Text' : asset?.name ?? 'Missing media';
+  const label = clip.type === 'text' ? clip.text.split('\n')[0] || T('Text') : asset?.name ?? T('Missing media');
   const thumb = clip.type === 'media' && asset?.thumbUrl && kind !== 'audio' ? asset.thumbUrl : null;
   const fadeIn = clip.type === 'media' ? clip.audio.fadeIn * pps : 0;
   const fadeOut = clip.type === 'media' ? clip.audio.fadeOut * pps : 0;
@@ -34,7 +35,7 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
     <div
       data-clip-id={clip.id}
       role="button"
-      aria-label={`${label} clip`}
+      aria-label={T('{name} clip', { name: label })}
       aria-pressed={selected}
       className="absolute top-[3px] rounded-[6px] overflow-visible"
       style={{
@@ -103,7 +104,7 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
         <>
           <div
             data-handle="start"
-            aria-label="Trim start"
+            aria-label={T("Trim start")}
             className="absolute top-0 h-full flex items-center justify-center cursor-ew-resize"
             style={{ left: -HANDLE_W / 2, width: HANDLE_W, touchAction: 'none' }}
           >
@@ -111,7 +112,7 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
           </div>
           <div
             data-handle="end"
-            aria-label="Trim end"
+            aria-label={T("Trim end")}
             className="absolute top-0 h-full flex items-center justify-center cursor-ew-resize"
             style={{ right: -HANDLE_W / 2, width: HANDLE_W, touchAction: 'none' }}
           >

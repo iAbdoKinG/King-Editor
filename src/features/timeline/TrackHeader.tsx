@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { t as T } from '../../i18n';
 import { createPortal } from 'react-dom';
 import type { Track } from '../../types/project';
 import { Icon, type IconName } from '../../components/Icon';
@@ -33,18 +34,18 @@ function TrackPopover({ track, x, y, index, count, clipCount, onClose }: Omit<Pr
   const rowBtn = 'flex h-10 w-full items-center justify-between rounded-lg px-2 text-left text-[13px] hover:bg-white/5 disabled:opacity-35';
   return createPortal(
     <div className="fixed inset-0 z-[100]" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className="sheet-in absolute w-[260px] rounded-xl border border-line bg-elevated p-2 shadow-2xl" style={pos} role="dialog" aria-label={`${live.name} options`}>
+      <div ref={ref} className="sheet-in absolute w-[260px] rounded-xl border border-line bg-elevated p-2 shadow-2xl" style={pos} role="dialog" aria-label={T('{name} options', { name: live.name })}>
         <input
           className="field mb-2 w-full"
           value={live.name}
-          aria-label="Track name"
+          aria-label={T("Track name")}
           onChange={(e) => set({ name: e.target.value.slice(0, 40) }, false)}
           onKeyDown={(e) => e.stopPropagation()}
         />
         {hasAudio && (
           <div className="px-1 pb-1">
             <SliderField
-              label="Volume %"
+              label={T("Volume %")}
               value={live.volume ?? 1}
               min={0}
               max={2}
@@ -57,38 +58,38 @@ function TrackPopover({ track, x, y, index, count, clipCount, onClose }: Omit<Pr
         )}
         {hasAudio && (
           <div className={rowBtn}>
-            Mute
-            <Toggle label="Mute track" checked={live.muted} onChange={(v) => set({ muted: v })} />
+            {T('Mute')}
+            <Toggle label={T("Mute track")} checked={live.muted} onChange={(v) => set({ muted: v })} />
           </div>
         )}
         {hasAudio && (
           <div className={rowBtn}>
-            Solo
-            <Toggle label="Solo track" checked={!!live.solo} onChange={(v) => set({ solo: v })} />
+            {T('Solo')}
+            <Toggle label={T("Solo track")} checked={!!live.solo} onChange={(v) => set({ solo: v })} />
           </div>
         )}
         {visual && (
           <div className={rowBtn}>
-            Hide
-            <Toggle label="Hide track" checked={live.hidden} onChange={(v) => set({ hidden: v })} />
+            {T('Hide')}
+            <Toggle label={T("Hide track")} checked={live.hidden} onChange={(v) => set({ hidden: v })} />
           </div>
         )}
         <div className="my-1 h-px bg-line" />
         <button className={rowBtn} disabled={index === 0} onClick={() => apply((p) => moveTrack(p, track.id, -1))}>
-          Move up <Icon name="up" size={15} />
+          {T('Move up')} <Icon name="up" size={15} />
         </button>
         <button className={rowBtn} disabled={index === count - 1} onClick={() => apply((p) => moveTrack(p, track.id, 1))}>
-          Move down <Icon name="down" size={15} />
+          {T('Move down')} <Icon name="down" size={15} />
         </button>
         <button
           className={`${rowBtn} text-danger`}
           onClick={() => {
-            if (clipCount > 0 && !window.confirm(`Delete “${live.name}” and its ${clipCount} clip(s)? You can undo this.`)) return;
+            if (clipCount > 0 && !window.confirm(T('Delete “{name}” and its {n} clip(s)? You can undo this.', { name: live.name, n: clipCount }))) return;
             apply((p) => removeTrack(p, track.id));
             onClose();
           }}
         >
-          Delete track <Icon name="trash" size={15} />
+          {T('Delete track')} <Icon name="trash" size={15} />
         </button>
       </div>
     </div>,
@@ -106,20 +107,20 @@ export const TrackHeader = memo(function TrackHeader({ track, height, compact, i
   return (
     <div className="flex items-center gap-0.5 border-b border-line/60 px-1.5 text-muted" style={{ height }} data-testid={`track-header-${track.kind}`}>
       {compact ? (
-        <button className="flex h-full w-full flex-col items-center justify-center gap-0.5" aria-label={`${track.name} options`} onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>
+        <button className="flex h-full w-full flex-col items-center justify-center gap-0.5" aria-label={T('{name} options', { name: track.name })} onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>
           <Icon name={off ? (visual ? 'eyeOff' : 'mute') : KIND_ICON[track.kind]} size={18} />
           {track.solo && <span className="text-[9px] font-bold text-accent">S</span>}
         </button>
       ) : (
         <>
           <Icon name={KIND_ICON[track.kind]} size={15} className="shrink-0" />
-          <button className="min-w-0 flex-1 truncate text-left text-[11px] font-medium text-text/85" onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>
+          <button dir="auto" className="min-w-0 flex-1 truncate text-start text-[11px] font-medium text-text/85" onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>
             {track.name}
           </button>
           {track.kind !== 'text' && (
             <button
               className={`flex h-8 w-6 items-center justify-center rounded-md text-[11px] font-bold hover:bg-elevated ${track.solo ? 'text-accent' : 'text-muted'}`}
-              aria-label={track.solo ? 'Unsolo track' : 'Solo track'}
+              aria-label={T(track.solo ? 'Unsolo track' : 'Solo track')}
               aria-pressed={!!track.solo}
               onClick={() => apply((p) => updateTrack(p, track.id, { solo: !track.solo }))}
             >
@@ -128,13 +129,13 @@ export const TrackHeader = memo(function TrackHeader({ track, height, compact, i
           )}
           <button
             className="flex h-8 w-7 items-center justify-center rounded-md hover:bg-elevated hover:text-text"
-            aria-label={visual ? (track.hidden ? 'Show track' : 'Hide track') : track.muted ? 'Unmute track' : 'Mute track'}
+            aria-label={T(visual ? (track.hidden ? 'Show track' : 'Hide track') : track.muted ? 'Unmute track' : 'Mute track')}
             aria-pressed={off}
             onClick={toggle}
           >
             <Icon name={visual ? (track.hidden ? 'eyeOff' : 'eye') : track.muted ? 'mute' : 'volume'} size={15} />
           </button>
-          <button className="flex h-8 w-5 items-center justify-center rounded-md hover:bg-elevated hover:text-text" aria-label={`${track.name} options`} onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>
+          <button className="flex h-8 w-5 items-center justify-center rounded-md hover:bg-elevated hover:text-text" aria-label={T('{name} options', { name: track.name })} onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}>
             <Icon name="more" size={15} />
           </button>
         </>

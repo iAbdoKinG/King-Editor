@@ -1,4 +1,5 @@
 import { memo, useRef, useState } from 'react';
+import { t as T } from '../../i18n';
 import { Icon } from '../../components/Icon';
 import { deleteClips } from '../../engine/timeline/ops';
 import { useMediaStore } from '../../stores/mediaStore';
@@ -11,7 +12,7 @@ import { ASSET_DRAG_TYPE } from '../timeline/constants';
 
 const ACCEPT = 'video/*,audio/*,image/*,.mov,.m4v,.mkv,.m4a,.flac,.caf';
 
-export function ImportButton({ className = '', label = 'Import' }: { className?: string; label?: string }) {
+export function ImportButton({ className = '', label }: { className?: string; label?: string }) {
   const input = useRef<HTMLInputElement>(null);
   const importFiles = useMediaStore((s) => s.importFiles);
   const toast = useUIStore((s) => s.toast);
@@ -23,7 +24,7 @@ export function ImportButton({ className = '', label = 'Import' }: { className?:
         data-testid="import-button"
       >
         <Icon name="plus" size={16} />
-        {label}
+        {label ?? T('Import')}
       </button>
       <input
         ref={input}
@@ -37,7 +38,7 @@ export function ImportButton({ className = '', label = 'Import' }: { className?:
           if (!files?.length) return;
           const { rejected } = await importFiles(files);
           e.target.value = '';
-          if (rejected.length) toast(`Unsupported file type: ${rejected.join(', ')}`, 'error');
+          if (rejected.length) toast(T('Unsupported file type: {names}', { names: rejected.join(', ') }), 'error');
         }}
       />
     </>
@@ -50,7 +51,7 @@ const AssetRow = memo(function AssetRow({ asset, usage }: { asset: MediaAsset; u
   const remove = useMediaStore((s) => s.remove);
   const onRemove = () => {
     if (usage > 0) {
-      if (!window.confirm(`“${asset.name}” is used by ${usage} clip(s). Remove it and those clips?`)) return;
+      if (!window.confirm(T('“{name}” is used by {n} clip(s). Remove it and those clips?', { name: asset.name, n: usage }))) return;
       const ps = useProjectStore.getState();
       const ids = Object.values(ps.project.clips)
         .filter((c) => c.type === 'media' && c.assetId === asset.id)
@@ -86,7 +87,7 @@ const AssetRow = memo(function AssetRow({ asset, usage }: { asset: MediaAsset; u
         )}
         {asset.status === 'loading' && <div className="absolute inset-0 animate-pulse bg-white/5" />}
         <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[9px] font-semibold uppercase tracking-wide text-text/90">
-          {asset.kind}
+          {T(asset.kind)}
         </span>
       </div>
       <div className="min-w-0 flex-1">
@@ -94,19 +95,19 @@ const AssetRow = memo(function AssetRow({ asset, usage }: { asset: MediaAsset; u
           {asset.name}
         </div>
         <div className={`tnum truncate text-[11px] ${asset.status === 'error' ? 'text-danger' : 'text-muted'}`}>
-          {asset.status === 'error' ? asset.error : asset.status === 'loading' ? 'Reading…' : meta}
+          {asset.status === 'error' ? T(asset.error ?? '') : asset.status === 'loading' ? T('Reading…') : meta}
         </div>
       </div>
       <button
         className="icon-btn !min-w-9 shrink-0"
-        aria-label={`Add ${asset.name} to timeline at playhead`}
+        aria-label={T('Add {name} to timeline at playhead', { name: asset.name })}
         disabled={asset.status !== 'ready'}
         onClick={() => addAssetToTimeline(asset.id)}
         data-testid="add-asset"
       >
         <Icon name="plus" size={18} />
       </button>
-      <button className="icon-btn !min-w-9 shrink-0" aria-label={`Remove ${asset.name}`} onClick={onRemove}>
+      <button className="icon-btn !min-w-9 shrink-0" aria-label={T('Remove {name}', { name: asset.name })} onClick={onRemove}>
         <Icon name="trash" size={16} />
       </button>
     </li>
@@ -142,11 +143,11 @@ export function MediaLibrary() {
         if (!e.dataTransfer.files.length) return;
         e.preventDefault();
         const { rejected } = await importFiles(e.dataTransfer.files);
-        if (rejected.length) toast(`Unsupported file type: ${rejected.join(', ')}`, 'error');
+        if (rejected.length) toast(T('Unsupported file type: {names}', { names: rejected.join(', ') }), 'error');
       }}
     >
       <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Media</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{T("Media")}</h2>
         <ImportButton className="!h-8 text-[12px]" />
       </div>
       <ul className="scroll-thin min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1.5">
@@ -156,15 +157,14 @@ export function MediaLibrary() {
       </ul>
       {order.length === 0 && (
         <div className="mx-3 mb-auto mt-2 rounded-xl border border-dashed border-line p-4 text-center text-[12px] leading-relaxed text-muted">
-          Import video, audio or images.
+          {T('Import video, audio or images.')}
           <br />
-          <span className="hidden pointer-fine:inline">Drop files here, then drag them to the timeline.</span>
-          <span className="pointer-fine:hidden">Tap + on a file to place it at the playhead.</span>
+          <span className="hidden pointer-fine:inline">{T("Drop files here, then drag them to the timeline.")}</span>
+          <span className="pointer-fine:hidden">{T("Tap + on a file to place it at the playhead.")}</span>
         </div>
       )}
       <p className="border-t border-line px-3 py-2 text-[10.5px] leading-snug text-muted/80">
-        Files stay on this device and are never uploaded. Work lasts for this session only — refreshing or
-        closing discards it.
+        {T('Files stay on this device and are never uploaded. Work lasts for this session only — refreshing or closing discards it.')}
       </p>
     </div>
   );

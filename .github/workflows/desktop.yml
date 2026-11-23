@@ -1,0 +1,58 @@
+# Builds the Windows desktop app on every update and publishes it to the
+# rolling "desktop-latest" release (stable download links used by the site).
+name: Build Windows app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'desktop/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-windows
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run dist:win
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Publish installer and portable app
+        shell: bash
+        working-directory: desktop/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la
+          test -f KING-EDITOR-Setup.exe && test -f KING-EDITOR-Portable.exe
+          NOTES="KING EDITOR for Windows — built from ${GITHUB_SHA::7} on $(date -u +%F). Installer: KING-EDITOR-Setup.exe · Portable: KING-EDITOR-Portable.exe"
+          if gh release view desktop-latest >/dev/null 2>&1; then
+            gh release upload desktop-latest KING-EDITOR-Setup.exe KING-EDITOR-Portable.exe --clobber
+            gh release edit desktop-latest --notes "$NOTES"
+          else
+            gh release create desktop-latest KING-EDITOR-Setup.exe KING-EDITOR-Portable.exe --title "KING EDITOR for Windows" --notes "$NOTES" --latest
+          fi

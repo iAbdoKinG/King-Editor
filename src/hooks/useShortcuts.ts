@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { isDesktop } from '../desktop/bridge';
+import { openProject, saveProject } from '../features/project/projectActions';
 import { engine } from '../engine/playback/engine';
 import { addMarkerAtPlayhead, jumpMarker, addText, deleteSelected, duplicateSelected, seekBy, splitAtPlayhead, stepFrames, togglePlay } from '../features/timeline/actions';
 import { zoom } from '../features/timeline/EditToolbar';
@@ -20,6 +22,8 @@ export function useShortcuts(): void {
       else if (mod && k === 'y') ps.redo();
       else if (mod && k === 'd') duplicateSelected();
       else if (mod && k === 'b') splitAtPlayhead();
+      else if (mod && k === 's' && isDesktop) void saveProject(e.shiftKey);
+      else if (mod && k === 'o' && isDesktop) void openProject();
       else if (mod) handled = false;
       else if (e.key === ' ' || k === 'k') togglePlay();
       else if (e.key === 'ArrowLeft') e.shiftKey ? seekBy(-1) : stepFrames(-1);

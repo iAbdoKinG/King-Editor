@@ -30,6 +30,7 @@ interface UIState {
   exportOpen: boolean;
   themeOpen: boolean;
   presetsOpen: boolean;
+  downloadOpen: boolean;
   contextMenu: ContextMenuState | null;
   toasts: Toast[];
   set: (patch: Partial<Omit<UIState, 'set' | 'toast' | 'zoomBy'>>) => void;
@@ -55,6 +56,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   exportOpen: false,
   themeOpen: false,
   presetsOpen: false,
+  downloadOpen: false,
   contextMenu: null,
   toasts: [],
   set: (patch) => set(patch),

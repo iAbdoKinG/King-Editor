@@ -1,4 +1,5 @@
 import { useUIStore } from '../stores/uiStore';
+import { t as T } from '../i18n';
 
 export function Toasts() {
   const toasts = useUIStore((s) => s.toasts);
@@ -11,7 +12,7 @@ export function Toasts() {
             t.tone === 'error' ? 'border-danger/60 bg-elevated text-text' : 'border-line bg-elevated text-text'
           }`}
         >
-          {t.text}
+          {T(t.text)}
         </div>
       ))}
     </div>

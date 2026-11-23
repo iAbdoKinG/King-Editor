@@ -1,0 +1,77 @@
+{
+  "name": "king-editor-desktop",
+  "productName": "KING EDITOR",
+  "version": "1.0.0",
+  "description": "KING EDITOR for Windows",
+  "author": "KING EDITOR",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "prepare-app": "node copy-app.cjs",
+    "start": "npm run prepare-app && electron .",
+    "dist:win": "npm run prepare-app && electron-builder --win nsis portable --x64 --publish never",
+    "dist:linux": "npm run prepare-app && electron-builder --linux dir --publish never"
+  },
+  "build": {
+    "appId": "app.kingeditor.desktop",
+    "productName": "KING EDITOR",
+    "copyright": "KING EDITOR",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "app/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KING EDITOR",
+      "artifactName": "KING-EDITOR-Setup.${ext}",
+      "installerLanguages": [
+        "en_US",
+        "ar_SA"
+      ],
+      "multiLanguageInstaller": true
+    },
+    "portable": {
+      "artifactName": "KING-EDITOR-Portable.${ext}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "kingproj",
+        "name": "KING EDITOR Project",
+        "description": "KING EDITOR Project"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  }
+}

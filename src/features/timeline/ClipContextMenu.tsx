@@ -1,4 +1,5 @@
 import { Menu } from '../../components/Menu';
+import { t as T } from '../../i18n';
 import { engine } from '../../engine/playback/engine';
 import { clipEnd } from '../../engine/timeline/model';
 import { useProjectStore } from '../../stores/projectStore';
@@ -22,7 +23,7 @@ export function ClipContextMenu({ compact }: { compact: boolean }) {
     <Menu
       x={menu.x}
       y={menu.y}
-      title="Clip"
+      title={T("Clip")}
       onClose={() => set({ contextMenu: null })}
       items={[
         { label: 'Split at playhead', hint: 'S', disabled: !canSplit, onSelect: splitAtPlayhead },

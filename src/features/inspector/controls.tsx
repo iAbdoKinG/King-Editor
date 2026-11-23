@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { t as T } from '../../i18n';
 import { Icon } from '../../components/Icon';
 import { useProjectStore } from '../../stores/projectStore';
 
@@ -13,7 +14,7 @@ export function Section({ title, children, action }: { title: string; children: 
           onClick={() => setOpen(!open)}
         >
           <Icon name={open ? 'down' : 'up'} size={13} />
-          {title}
+          {T(title)}
         </button>
         {action}
       </div>
@@ -79,11 +80,11 @@ export function SliderField({
       {keyframe && (
         <button
           className="flex h-8 w-6 items-center justify-center disabled:opacity-30"
-          aria-label={`${keyframe.on ? 'Remove' : 'Add'} ${label} keyframe`}
+          aria-label={T(keyframe.on ? 'Remove {label} keyframe' : 'Add {label} keyframe', { label })}
           aria-pressed={keyframe.on}
           disabled={keyframe.disabled}
           onClick={keyframe.onToggle}
-          title={keyframe.on ? 'Remove keyframe' : 'Add keyframe at playhead'}
+          title={T(keyframe.on ? 'Remove keyframe' : 'Add keyframe at playhead')}
         >
           <span
             className={`block h-[9px] w-[9px] rotate-45 border ${
@@ -95,6 +96,7 @@ export function SliderField({
       <label className={`truncate text-[12px] ${keyframe?.animated ? 'text-accent' : 'text-muted'}`}>{label}</label>
       <input
         type="range"
+        dir="ltr"
         className="range"
         min={min}
         max={max}
@@ -114,10 +116,11 @@ export function SliderField({
       <div className="relative">
         <input
           className="field tnum w-full !h-8 !px-1.5 text-right text-[12px]"
+          dir="ltr"
           value={text}
           disabled={disabled}
           inputMode="decimal"
-          aria-label={`${label} value`}
+          aria-label={T('{label} value', { label })}
           onFocus={(e) => {
             setEditing(true);
             e.target.select();
@@ -170,7 +173,7 @@ export function Segmented<T extends string | number>({
           className={`flex-1 text-[12px] ${o.value === value ? 'bg-elevated text-text' : 'text-muted hover:text-text'}`}
           onClick={() => onChange(o.value)}
         >
-          {o.label}
+          {T(o.label)}
         </button>
       ))}
     </div>

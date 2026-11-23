@@ -3,10 +3,14 @@
  * iOS media unlock on first gesture, page-hide handling, unload warning.
  */
 import { engine } from '../engine/playback/engine';
+import { isDesktop } from '../desktop/bridge';
+import { initDesktopProjects, isDirty } from '../features/project/projectActions';
 import { imageCache } from '../engine/rendering/imageCache';
 import { releaseWaveform } from '../features/media/waveform';
 import { ensureFont, useFontStore } from '../features/fonts/fonts';
 import { checkAsset, checkProject } from '../features/advisor/advisor';
+import { t as T, useLangStore } from '../i18n';
+import { AR } from '../i18n/ar';
 import { onAssetReleased, useMediaStore } from '../stores/mediaStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
@@ -35,7 +39,9 @@ export function bootstrap(): void {
 
   // Resource advisor (debounced; never on the hot path).
   let advTimer = 0;
+  initDesktopProjects();
   const advise = () => {
+    if (isDesktop) return;
     clearTimeout(advTimer);
     advTimer = window.setTimeout(() => checkProject(useProjectStore.getState().project, useMediaStore.getState().assets), 800);
   };
@@ -43,6 +49,7 @@ export function bootstrap(): void {
     if (s.project.clips !== prev.project.clips) advise();
   });
   useMediaStore.subscribe((s, prev) => {
+    if (isDesktop) return;
     for (const id in s.assets) if (s.assets[id].status === 'ready' && prev.assets[id]?.status !== 'ready') checkAsset(s.assets[id]);
   });
 
@@ -69,9 +76,9 @@ export function bootstrap(): void {
 
   // Session-only editing: warn before discarding work.
   window.addEventListener('beforeunload', (e) => {
-    const hasWork =
-      Object.keys(useProjectStore.getState().project.clips).length > 0 ||
-      useMediaStore.getState().order.length > 0;
+    const hasWork = isDesktop
+      ? isDirty()
+      : Object.keys(useProjectStore.getState().project.clips).length > 0 || useMediaStore.getState().order.length > 0;
     if (hasWork) {
       e.preventDefault();
       e.returnValue = '';
@@ -83,8 +90,31 @@ export function bootstrap(): void {
 
   window.addEventListener('resize', () => useUIStore.getState().set({ contextMenu: null }));
 
+  // Re-localize default names (project title, "Video 1"…) when the language changes;
+  // names the user typed are left alone.
+  useLangStore.subscribe((st, prev) => {
+    if (st.lang === prev.lang) return;
+    const defaults = (k: string) => [k, AR[k]];
+    useProjectStore.getState().apply(
+      (p) => {
+        const name = defaults('Untitled Project').includes(p.settings.name) ? T('Untitled Project') : p.settings.name;
+        const tracks = p.tracks.map((tr) => {
+          for (const key of ['Video {n}', 'Audio {n}', 'Text {n}']) {
+            for (const pat of defaults(key)) {
+              const m = tr.name.match(new RegExp('^' + pat.replace('{n}', '(\\d+)') + '$'));
+              if (m) return { ...tr, name: T(key, { n: m[1] }) };
+            }
+          }
+          return tr;
+        });
+        return { ...p, settings: { ...p.settings, name }, tracks };
+      },
+      { commit: false },
+    );
+  });
+
   // Opt-in debug handle for automated tests (?debug). Exposes nothing by default.
   if (new URLSearchParams(location.search).has('debug')) {
-    (window as unknown as Record<string, unknown>).__KING__ = { engine, useProjectStore, useMediaStore, useUIStore };
+    (window as unknown as Record<string, unknown>).__KING__ = { engine, useProjectStore, useMediaStore, useUIStore, useLangStore };
   }
 }

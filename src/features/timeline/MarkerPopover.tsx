@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { t as T } from '../../i18n';
 import { createPortal } from 'react-dom';
 import { MARKER_COLORS, removeMarker, updateMarker } from '../../engine/timeline/ops';
 import { useProjectStore } from '../../stores/projectStore';
@@ -23,17 +24,17 @@ export function MarkerPopover({ id, x, y, onClose }: { id: string; x: number; y:
   };
   return createPortal(
     <div className="fixed inset-0 z-[100]" onPointerDown={(e) => e.target === e.currentTarget && (commit(), onClose())}>
-      <div ref={ref} className="sheet-in absolute w-[240px] rounded-xl border border-line bg-elevated p-3 shadow-2xl" style={pos} role="dialog" aria-label="Marker">
+      <div ref={ref} className="sheet-in absolute w-[240px] rounded-xl border border-line bg-elevated p-3 shadow-2xl" style={pos} role="dialog" aria-label={T("Marker")}>
         <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
-          <span className="font-semibold uppercase tracking-wider">Marker</span>
+          <span className="font-semibold uppercase tracking-wider">{T("Marker")}</span>
           <span className="tnum">{formatTimecode(marker.t, fps)}</span>
         </div>
         <input
           autoFocus
           className="field mb-2 w-full"
-          placeholder="Name (optional)"
+          placeholder={T("Name (optional)")}
           value={label}
-          aria-label="Marker name"
+          aria-label={T("Marker name")}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation();
@@ -47,7 +48,7 @@ export function MarkerPopover({ id, x, y, onClose }: { id: string; x: number; y:
           {MARKER_COLORS.map((c) => (
             <button
               key={c}
-              aria-label={`Color ${c}`}
+              aria-label={T('Color {c}', { c })}
               aria-pressed={c === marker.color}
               className={`h-7 w-7 rounded-full ${c === marker.color ? 'ring-2 ring-text ring-offset-2 ring-offset-elevated' : ''}`}
               style={{ background: c }}
@@ -57,10 +58,10 @@ export function MarkerPopover({ id, x, y, onClose }: { id: string; x: number; y:
         </div>
         <div className="flex justify-between">
           <button className="text-[12px] text-danger" onClick={() => (apply((p) => removeMarker(p, id)), onClose())}>
-            Delete
+            {T('Delete')}
           </button>
           <button className="text-[12px] font-semibold text-accent" onClick={() => (commit(), onClose())}>
-            Done
+            {T('Done')}
           </button>
         </div>
       </div>

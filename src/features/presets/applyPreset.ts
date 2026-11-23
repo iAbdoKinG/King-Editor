@@ -1,4 +1,5 @@
 import type { Clip, Project } from '../../types/project';
+import { t as T } from '../../i18n';
 import { useThemeStore } from '../../app/theme';
 import { defaultEffects } from '../../engine/timeline/model';
 import { updateClip } from '../../engine/timeline/ops';
@@ -28,7 +29,7 @@ export function applyPreset(p: Preset): boolean {
   const toast = useUIStore.getState().toast;
   if (p.kind === 'theme') {
     useThemeStore.getState().setCustom(p.data as never);
-    toast(`Theme “${p.name}” applied.`);
+    toast(T('Theme “{name}” applied.', { name: p.name }));
     return true;
   }
   const { clip, reason } = presetTarget(p, ps.project, ps.selectedClipId, ps.selectedTransitionId);
@@ -57,6 +58,6 @@ export function applyPreset(p: Preset): boolean {
     }),
   );
   if (p.kind === 'transition') ps.selectTransition(clip.id);
-  toast(`“${p.name}” applied.`);
+  toast(T('“{name}” applied.', { name: p.name }));
   return true;
 }

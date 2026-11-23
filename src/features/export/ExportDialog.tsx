@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { isDesktop } from '../../desktop/bridge';
+import { t as T } from '../../i18n';
 import { Icon } from '../../components/Icon';
 import { engine } from '../../engine/playback/engine';
 import { useMediaStore } from '../../stores/mediaStore';
@@ -72,7 +74,7 @@ export function ExportDialog() {
         setPlan(p);
         if (!('error' in p)) void import('../advisor/advisor').then((a) => a.checkExport(p.duration, p.height, p.fps));
       })
-      .catch(() => live && setPlan({ error: 'Could not load the encoder. Check your connection and try again.' }));
+      .catch(() => live && setPlan({ error: T('Could not load the encoder. Check your connection and try again.') }));
     return () => {
       live = false;
     };
@@ -107,7 +109,7 @@ export function ExportDialog() {
       setState({ kind: 'done', result, url: URL.createObjectURL(result.blob) });
     } catch (e) {
       if ((e as Error).name === 'AbortError' || ac.signal.aborted) setState({ kind: 'setup' });
-      else setState({ kind: 'error', message: (e as Error).message || 'Export failed.' });
+      else setState({ kind: 'error', message: (e as Error).message || T('Export failed.') });
     } finally {
       release?.();
       abortRef.current = null;
@@ -125,54 +127,54 @@ export function ExportDialog() {
     body = (
       <>
         <div className="grid grid-cols-[90px_1fr] items-center gap-x-3 gap-y-3">
-          <span className="text-[12px] text-muted">Resolution</span>
-          <Segmented<720 | 1080>
-            label="Export resolution"
+          <span className="text-[12px] text-muted">{T("Resolution")}</span>
+          <Segmented<720 | 1080 | 2160>
+            label={T("Export resolution")}
             value={settings.height}
             options={[
               { value: 720, label: '720p' },
               { value: 1080, label: '1080p' },
+              ...(isDesktop ? [{ value: 2160 as const, label: '4K' }] : []),
             ]}
             onChange={(v) => setSettings((s) => ({ ...s, height: v }))}
           />
-          <span className="text-[12px] text-muted">Frame rate</span>
+          <span className="text-[12px] text-muted">{T("Frame rate")}</span>
           <Segmented<ExportSettings['fps']>
-            label="Export frame rate"
+            label={T("Export frame rate")}
             value={settings.fps}
             options={([24, 25, 30, 60] as const).map((f) => ({ value: f, label: `${f}` }))}
             onChange={(v) => setSettings((s) => ({ ...s, fps: v }))}
           />
         </div>
         <div className="rounded-xl border border-line bg-bg/60 p-3 text-[12px] leading-relaxed">
-          {!plan && <span className="text-muted">Checking this device’s encoders…</span>}
-          {plan && 'error' in plan && <span className="text-danger">{plan.error}</span>}
+          {!plan && <span className="text-muted">{T("Checking this device’s encoders…")}</span>}
+          {plan && 'error' in plan && <span className="text-danger">{T(plan.error)}</span>}
           {ok && (
             <>
               <div>
-                <span className="text-muted">Output: </span>
+                <span className="text-muted">{T("Output:")} </span>
                 {ok.width}×{ok.height} · {ok.fps} fps · {ok.container.toUpperCase()} ({CODEC_LABEL[ok.videoCodec]}
-                {ok.audioCodec ? ` + ${CODEC_LABEL[ok.audioCodec]}` : ', no audio'})
+                {ok.audioCodec ? ` + ${CODEC_LABEL[ok.audioCodec]}` : T(', no audio')})
               </div>
               <div>
-                <span className="text-muted">Length: </span>
+                <span className="text-muted">{T("Length:")} </span>
                 {formatDuration(ok.duration)}
               </div>
               {ok.container === 'webm' && (
-                <div className="mt-1 text-muted">This browser cannot encode MP4, so the file will be WebM.</div>
+                <div className="mt-1 text-muted">{T("This browser cannot encode MP4, so the file will be WebM.")}</div>
               )}
             </>
           )}
         </div>
         <p className="text-[11px] leading-snug text-muted">
-          Rendering happens on this device and your media is not uploaded. Keep the app open in the foreground until it
-          finishes.
+          {T('Rendering happens on this device and your media is not uploaded. Keep the app open in the foreground until it finishes.')}
         </p>
       </>
     );
     footer = (
       <>
         <button className="h-10 rounded-lg px-4 text-[13px] text-muted hover:bg-elevated hover:text-text" onClick={close}>
-          Cancel
+          {T('Cancel')}
         </button>
         <button
           className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-on-accent"
@@ -180,7 +182,7 @@ export function ExportDialog() {
           onClick={start}
           data-testid="export-start"
         >
-          Export video
+          {T('Export video')}
         </button>
       </>
     );
@@ -190,20 +192,20 @@ export function ExportDialog() {
     body = (
       <div className="py-2" aria-live="polite">
         <div className="mb-2 flex justify-between text-[12px]">
-          <span>{PHASE_LABEL[state.phase]}</span>
+          <span>{T(PHASE_LABEL[state.phase])}</span>
           <span className="tnum text-muted">
-            {Math.round(state.progress * 100)}%{eta !== null ? ` · ~${formatDuration(Math.max(1, eta))} left` : ''}
+            {Math.round(state.progress * 100)}%{eta !== null ? ` · ${T('~{t} left', { t: formatDuration(Math.max(1, eta)) })}` : ''}
           </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-bg" role="progressbar" aria-valuenow={Math.round(state.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
           <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${state.progress * 100}%` }} />
         </div>
-        <p className="mt-3 text-[11px] text-muted">Keep this screen open.</p>
+        <p className="mt-3 text-[11px] text-muted">{T("Keep this screen open.")}</p>
       </div>
     );
     footer = (
       <button className="h-10 rounded-lg px-4 text-[13px] text-danger hover:bg-elevated" onClick={() => abortRef.current?.abort()} data-testid="export-cancel">
-        Cancel export
+        {T('Cancel export')}
       </button>
     );
   } else if (state.kind === 'done') {
@@ -216,14 +218,14 @@ export function ExportDialog() {
           <div className="tnum text-muted">
             {r.width}×{r.height} · {formatDuration(r.duration)} · {formatBytes(r.blob.size)}
           </div>
-          {!r.playableHere && <div className="text-muted">This browser can’t preview this format, but the file was verified as valid.</div>}
+          {!r.playableHere && <div className="text-muted">{T("This browser can’t preview this format, but the file was verified as valid.")}</div>}
         </div>
       </div>
     );
     footer = (
       <>
         <button className="h-10 rounded-lg px-4 text-[13px] text-muted hover:bg-elevated hover:text-text" onClick={close}>
-          Close
+          {T('Close')}
         </button>
         <a
           className="flex h-10 items-center rounded-lg border border-line px-4 text-[13px] font-medium hover:bg-elevated"
@@ -231,27 +233,27 @@ export function ExportDialog() {
           download={r.filename}
           data-testid="export-download"
         >
-          Download
+          {T(isDesktop ? 'Save video…' : 'Download')}
         </a>
         {canShare && (
           <button
             className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-on-accent"
             onClick={() => void navigator.share({ files: [file!], title: r.filename }).catch(() => undefined)}
           >
-            Save / Share
+            {T('Save / Share')}
           </button>
         )}
       </>
     );
   } else {
-    body = <p className="text-[13px] text-danger">{state.message}</p>;
+    body = <p className="text-[13px] text-danger">{T(state.message)}</p>;
     footer = (
       <>
         <button className="h-10 rounded-lg px-4 text-[13px] text-muted hover:bg-elevated hover:text-text" onClick={close}>
-          Close
+          {T('Close')}
         </button>
         <button className="h-10 rounded-lg border border-line px-4 text-[13px]" onClick={() => setState({ kind: 'setup' })}>
-          Back
+          {T('Back')}
         </button>
       </>
     );
@@ -269,10 +271,10 @@ export function ExportDialog() {
       <div className="sheet-in w-full max-w-md rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <h2 id="export-title" className="text-[15px] font-semibold">
-            Export video
+            {T('Export video')}
           </h2>
           {state.kind !== 'running' && (
-            <button className="icon-btn !h-8 !min-w-8" aria-label="Close" onClick={close}>
+            <button className="icon-btn !h-8 !min-w-8" aria-label={T("Close")} onClick={close}>
               <Icon name="close" size={16} />
             </button>
           )}

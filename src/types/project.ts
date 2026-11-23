@@ -15,6 +15,8 @@ export interface MediaAsset {
   width: number;
   height: number;
   thumbUrl?: string;
+  /** Absolute file path (desktop app only), used to save and reopen projects. */
+  path?: string;
   status: 'loading' | 'ready' | 'error';
   error?: string;
 }

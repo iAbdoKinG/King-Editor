@@ -1,4 +1,5 @@
 import { Icon } from '../../components/Icon';
+import { t as T } from '../../i18n';
 import { useAdvisorStore } from './advisor';
 
 export function AdvisorBanner() {
@@ -14,7 +15,7 @@ export function AdvisorBanner() {
           <div className="mt-0.5 text-[12px] leading-snug text-muted">{a.body}</div>
         </div>
         <button className="h-8 shrink-0 rounded-lg px-3 text-[12px] font-semibold text-accent hover:bg-accent/10" onClick={dismiss}>
-          Got it
+          {T('Got it')}
         </button>
       </div>
     </div>

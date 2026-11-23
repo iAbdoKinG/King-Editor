@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { t as T } from '../i18n';
 
 /** Non-modal bottom sheet for phones: the preview stays visible above it. */
 export function BottomSheet({ children, onClose, label }: { children: ReactNode; onClose: () => void; label: string }) {
@@ -8,7 +9,7 @@ export function BottomSheet({ children, onClose, label }: { children: ReactNode;
       role="dialog"
       aria-label={label}
     >
-      <button className="flex h-6 w-full shrink-0 items-center justify-center" aria-label={`Close ${label}`} onClick={onClose}>
+      <button className="flex h-6 w-full shrink-0 items-center justify-center" aria-label={`${T('Close')} ${label}`} onClick={onClose}>
         <span className="h-1 w-10 rounded-full bg-line" />
       </button>
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

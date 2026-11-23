@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { t as T } from '../../i18n';
 import { engine } from '../../engine/playback/engine';
 import { frameSize } from '../../engine/timeline/model';
 import { useProjectStore } from '../../stores/projectStore';
@@ -66,12 +67,12 @@ export function Preview({ theater = false }: { theater?: boolean }) {
   }, [box.w, renderer]);
 
   return (
-    <div ref={hostRef} className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-stage">
+    <div ref={hostRef} dir="ltr" className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-stage">
       <div className="relative shadow-[0_0_0_1px_rgba(57,67,74,0.8)]" style={{ width: box.w, height: box.h }}>
         {renderer === 'gpu' ? (
-          <div ref={stageRef} className="absolute inset-0 overflow-hidden" aria-label="Preview" data-testid="preview-stage" />
+          <div ref={stageRef} className="absolute inset-0 overflow-hidden" aria-label={T("Preview")} data-testid="preview-stage" />
         ) : (
-          <canvas ref={canvasRef} className="block h-full w-full" aria-label="Preview" data-testid="preview-canvas" />
+          <canvas ref={canvasRef} className="block h-full w-full" aria-label={T("Preview")} data-testid="preview-canvas" />
         )}
         <TransformOverlay width={box.w} height={box.h} />
       </div>

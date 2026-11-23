@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t as T } from '../i18n';
 import { BottomSheet } from '../components/BottomSheet';
 import { Header } from '../components/Header';
 import { Icon } from '../components/Icon';
@@ -6,6 +7,7 @@ import { StatsOverlay } from '../components/StatsOverlay';
 import { Toasts } from '../components/Toasts';
 import { ThemeDialog } from '../components/ThemeDialog';
 import { AdvisorBanner } from '../features/advisor/AdvisorBanner';
+import { DownloadDialog } from '../components/DownloadDialog';
 import { PresetLinkImport, PresetsDialog } from '../features/presets/PresetsDialog';
 import { ExportDialog } from '../features/export/ExportDialog';
 import { Inspector } from '../features/inspector/Inspector';
@@ -49,7 +51,7 @@ function PreviewPane({ compact }: { compact: boolean }) {
       <Preview theater={fs.theater} />
       <Transport compact={compact} onFullscreen={fs.toggle} />
       {fs.theater && (
-        <button className="icon-btn absolute right-3 top-3 bg-black/50" style={{ marginTop: 'env(safe-area-inset-top)' }} aria-label="Exit fullscreen" onClick={fs.exitTheater}>
+        <button className="icon-btn absolute right-3 top-3 bg-black/50" style={{ marginTop: 'env(safe-area-inset-top)' }} aria-label={T("Exit fullscreen")} onClick={fs.exitTheater}>
           <Icon name="close" />
         </button>
       )}
@@ -63,7 +65,7 @@ function Splitter({ onResize }: { onResize: (dy: number) => void }) {
     <div
       role="separator"
       aria-orientation="horizontal"
-      aria-label="Resize timeline"
+      aria-label={T("Resize timeline")}
       className="group relative z-10 h-2 shrink-0 cursor-row-resize bg-bg"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
@@ -96,7 +98,7 @@ function WideLayout() {
       <Header compact={false} />
       <div className="safe-x flex min-h-0 flex-1">
         {libraryOpen && (
-          <aside className="panel w-[272px] shrink-0 border-r xl:w-[300px]" aria-label="Media library">
+          <aside className="panel w-[272px] shrink-0 border-r xl:w-[300px]" aria-label={T("Media library")}>
             <MediaLibrary />
           </aside>
         )}
@@ -104,13 +106,13 @@ function WideLayout() {
           <PreviewPane compact={false} />
         </main>
         {inspectorOpen && (
-          <aside className="panel w-[300px] shrink-0 border-l xl:w-[320px]" aria-label="Inspector">
+          <aside className="panel w-[300px] shrink-0 border-l xl:w-[320px]" aria-label={T("Inspector")}>
             <Inspector onClose={() => set({ inspectorOpen: false })} />
           </aside>
         )}
       </div>
       <Splitter onResize={(dy) => setTimelineH((h) => clampH(h - dy))} />
-      <section className="safe-x safe-bottom flex shrink-0 flex-col border-t border-line" style={{ height: timelineH }} aria-label="Timeline">
+      <section className="safe-x safe-bottom flex shrink-0 flex-col border-t border-line" style={{ height: timelineH }} aria-label={T("Timeline")}>
         <EditToolbar />
         <Timeline compact={false} />
       </section>
@@ -130,19 +132,19 @@ function CompactLayout({ landscape }: { landscape: boolean }) {
         <div className={landscape ? 'flex w-[52%] min-w-0 flex-col border-r border-line' : 'flex h-[42%] min-h-[180px] shrink-0 flex-col'}>
           <PreviewPane compact />
         </div>
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="Timeline">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={T("Timeline")}>
           <CompactTimelineBar />
           <Timeline compact />
         </section>
       </div>
       <BottomBar />
       {sheet === 'media' && (
-        <BottomSheet label="Media" onClose={close}>
+        <BottomSheet label={T("Media")} onClose={close}>
           <MediaLibrary />
         </BottomSheet>
       )}
       {sheet === 'inspector' && (
-        <BottomSheet label="Inspector" onClose={close}>
+        <BottomSheet label={T("Inspector")} onClose={close}>
           <Inspector onClose={close} />
         </BottomSheet>
       )}
@@ -167,6 +169,7 @@ export function App() {
       <PresetsDialog />
       <PresetLinkImport />
       <AdvisorBanner />
+      <DownloadDialog />
       <Toasts />
     </>
   );

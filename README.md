@@ -84,6 +84,23 @@ Keyboard: Space/K play · ←/→ frame · ⇧←/→ 1 s · S or ⌘B split · 
 - **Resource advisor**: warns once about workloads that are heavy for a browser (4K, very long media, many stacked videos, heavy blur, very long exports).
 - **Touch**: wider trim handles on touch screens; double-tap a clip to open its properties.
 
+## Languages
+
+English and **Arabic** (full translation, right-to-left layout, Arabic UI font). The timeline, ruler, preview and playback controls stay left-to-right because time flows left → right. Switch with the **ع / EN** button (or ⋯ on phones); the choice is remembered. Strings live in `src/i18n/ar.ts` (English text is the key).
+
+## Windows desktop app (`desktop/`)
+
+An Electron shell around the same app. It is built automatically on GitHub's Windows runners (`.github/workflows/desktop.yml`) and published to the rolling `desktop-latest` release:
+
+- Installer: `KING-EDITOR-Setup.exe` · Portable: `KING-EDITOR-Portable.exe`
+- **Projects**: save/open `.kingproj` files (Ctrl+S / Ctrl+Shift+S / Ctrl+O, double-click to open). The file stores the timeline and media *paths*, never the media itself, and it is fully validated on load.
+- **Media streaming**: `media://` serves local files with HTTP Range, so large videos are never loaded into memory. Only files the user picked, or that an opened project references, are served.
+- **4K export**, no browser resource warnings, works offline (`app://`), and the native Save dialog is used for exported videos.
+- Hardened: context isolation, sandbox, no Node.js in the page, navigation locked to the app.
+- The app is not code-signed, so Windows SmartScreen shows a warning on first run ("More info" → "Run anyway").
+
+Local build: `npm run build && cd desktop && npm ci && npm run dist:win` (on Windows), or `npm start` to run it. Test: `npm run build && (cd desktop && node copy-app.cjs) && xvfb-run -a node scripts/e2e-desktop.cjs <media> <workdir>`.
+
 ## Known limitations
 
 - **Export needs WebCodecs** (Safari 16.4+/iPadOS 16.4+, current Chrome/Edge). Audio uses AAC where the browser can encode it, otherwise Opus. 4K is not offered yet. The audio mix is rendered in memory (about 23 MB per minute).

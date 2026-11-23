@@ -3,6 +3,7 @@
  * (especially on iPhone/iPad) and explains why, once per session per topic.
  */
 import { create } from 'zustand';
+import { t as T } from '../../i18n';
 import type { MediaAsset, Project } from '../../types/project';
 import { clipRange } from '../../engine/timeline/transitions';
 
@@ -32,7 +33,7 @@ export const useAdvisorStore = create<AdvisorState>((set, get) => ({
   },
 }));
 
-const DESKTOP = 'The upcoming Desktop version is designed for this level of work.';
+const desktop = () => T('The Windows desktop version is built for this level of work.');
 
 function isLowEndDevice(): boolean {
   const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
@@ -45,14 +46,20 @@ export function checkAsset(a: MediaAsset): void {
   if (px > 3840 * 2160 * 0.9)
     useAdvisorStore.getState().show({
       key: '4k',
-      title: '4K video on the web',
-      body: `“${a.name}” is ${a.width}×${a.height}. Playback and export can be slow or run out of memory in a browser${isLowEndDevice() ? ' on this device' : ''}. ${DESKTOP}`,
+      title: T('4K video on the web'),
+      body: T('“{name}” is {w}×{h}. Playback and export can be slow or run out of memory in a browser{device}. {desktop}', {
+        name: a.name,
+        w: a.width,
+        h: a.height,
+        device: isLowEndDevice() ? T(' on this device') : '',
+        desktop: desktop(),
+      }),
     });
   if (a.duration > 20 * 60)
     useAdvisorStore.getState().show({
       key: 'long',
-      title: 'Very long video',
-      body: `“${a.name}” is over 20 minutes. Waveform analysis and export will take a while in the browser. ${DESKTOP}`,
+      title: T('Very long video'),
+      body: T('“{name}” is over 20 minutes. Waveform analysis and export will take a while in the browser. {desktop}', { name: a.name, desktop: desktop() }),
     });
 }
 
@@ -79,15 +86,15 @@ export function checkProject(project: Project, assets: Record<string, MediaAsset
   if (n > limit)
     useAdvisorStore.getState().show({
       key: 'layers',
-      title: `${n} videos at the same time`,
-      body: `Stacking more than ${limit} videos makes the browser decode them all at once, which can stutter on this device. Consider fewer overlapping videos here. ${DESKTOP}`,
+      title: T('{n} videos at the same time', { n }),
+      body: T('Stacking more than {limit} videos makes the browser decode them all at once, which can stutter on this device. Consider fewer overlapping videos here. {desktop}', { limit, desktop: desktop() }),
     });
   const blurred = Object.values(project.clips).filter((c) => (c.effects?.blur ?? 0) > 8).length;
   if (blurred >= 3)
     useAdvisorStore.getState().show({
       key: 'blur',
-      title: 'Heavy blur',
-      body: `Strong blur on ${blurred} clips is expensive to render in real time on mobile devices. ${DESKTOP}`,
+      title: T('Heavy blur'),
+      body: T('Strong blur on {n} clips is expensive to render in real time on mobile devices. {desktop}', { n: blurred, desktop: desktop() }),
     });
 }
 
@@ -96,7 +103,12 @@ export function checkExport(durationSec: number, height: number, fps: number): v
   if (frames > 30 * 60 * 10 * 2.25)
     useAdvisorStore.getState().show({
       key: 'export-long',
-      title: 'Long export',
-      body: `Rendering ${Math.round(durationSec / 60)} min at ${height}p${fps} in the browser can take a long time and needs the screen to stay on. ${DESKTOP}`,
+      title: T('Long export'),
+      body: T('Rendering {m} min at {h}p{fps} in the browser can take a long time and needs the screen to stay on. {desktop}', {
+        m: Math.round(durationSec / 60),
+        h: height,
+        fps,
+        desktop: desktop(),
+      }),
     });
 }

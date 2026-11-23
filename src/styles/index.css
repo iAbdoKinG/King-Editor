@@ -30,6 +30,9 @@
     -webkit-text-size-adjust: 100%;
     color-scheme: dark;
   }
+  html[lang='ar'] body {
+    font-family: 'IBM Plex Sans Arabic', var(--font-sans);
+  }
   body {
     margin: 0;
     background: var(--color-bg);

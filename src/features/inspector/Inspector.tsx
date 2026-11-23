@@ -3,6 +3,7 @@
  * selection (video / image / audio / text clip, or project settings).
  */
 import { useState } from 'react';
+import { t as T } from '../../i18n';
 import type { AnimProp, Clip, Direction, Easing, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform, Transition, TransitionType } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
 import {
@@ -51,7 +52,7 @@ function usePatch(clipId: string) {
 function SaveButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button className="mr-1 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted hover:bg-elevated hover:text-text" onClick={onClick} aria-label={label} title={label}>
-      <Icon name="bookmark" size={12} /> Save
+      <Icon name="bookmark" size={12} /> {T('Save')}
     </button>
   );
 }
@@ -59,7 +60,7 @@ function SaveButton({ onClick, label }: { onClick: () => void; label: string }) 
 function ResetButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button className="mr-2 rounded-md px-2 py-1 text-[11px] text-muted hover:bg-elevated hover:text-text" onClick={onClick} aria-label={label}>
-      Reset
+      {T('Reset')}
     </button>
   );
 }
@@ -91,20 +92,20 @@ function TransformSection({ clip }: { clip: Clip }) {
   const { width: W, height: H } = frameSize(settings);
   return (
     <Section
-      title="Transform"
+      title={T("Transform")}
       action={
         <ResetButton
-          label="Reset transform"
+          label={T("Reset transform")}
           onClick={() => patch((c) => ({ ...c, keyframes: undefined, transform: { ...defaultTransform(), crop: c.transform.crop } }) as Clip)}
         />
       }
     >
       <TransformTools clip={clip} lt={lt} />
-      <SliderField label="Position X" value={tr.x} min={-W} max={W} step={1} keyframe={kf('x')} onChange={(v, c) => anim('x', v, c)} />
-      <SliderField label="Position Y" value={tr.y} min={-H} max={H} step={1} keyframe={kf('y')} onChange={(v, c) => anim('y', v, c)} />
+      <SliderField label={T("Position X")} value={tr.x} min={-W} max={W} step={1} keyframe={kf('x')} onChange={(v, c) => anim('x', v, c)} />
+      <SliderField label={T("Position Y")} value={tr.y} min={-H} max={H} step={1} keyframe={kf('y')} onChange={(v, c) => anim('y', v, c)} />
       {uniform ? (
         <SliderField
-          label="Scale %"
+          label={T("Scale %")}
           value={tr.scaleX}
           min={0.05}
           max={4}
@@ -116,14 +117,14 @@ function TransformSection({ clip }: { clip: Clip }) {
         />
       ) : (
         <>
-          <SliderField label="Scale X %" value={base.scaleX} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleX: v }, c)} />
-          <SliderField label="Scale Y %" value={base.scaleY} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleY: v }, c)} />
+          <SliderField label={T("Scale X %")} value={base.scaleX} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleX: v }, c)} />
+          <SliderField label={T("Scale Y %")} value={base.scaleY} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleY: v }, c)} />
         </>
       )}
       {!scaleAnimated && (
-        <Row label="Uniform">
+        <Row label={T("Uniform")}>
           <Toggle
-            label="Uniform scale"
+            label={T("Uniform scale")}
             checked={uniform}
             onChange={(on) => {
               setUniform(on);
@@ -132,11 +133,11 @@ function TransformSection({ clip }: { clip: Clip }) {
           />
         </Row>
       )}
-      <SliderField label="Rotation °" value={tr.rotation} min={-180} max={180} step={0.5} keyframe={kf('rotation')} onChange={(v, c) => anim('rotation', v, c)} />
-      <SliderField label="Opacity %" value={tr.opacity} min={0} max={1} step={0.01} display={pct} parse={fromPct} keyframe={kf('opacity')} onChange={(v, c) => anim('opacity', v, c)} />
-      <SliderField label="Anchor X %" value={base.anchorX} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorX: v }, c)} />
-      <SliderField label="Anchor Y %" value={base.anchorY} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorY: v }, c)} />
-      {!inside && <p className="text-[11px] leading-snug text-muted">Move the playhead over this clip to add keyframes.</p>}
+      <SliderField label={T("Rotation °")} value={tr.rotation} min={-180} max={180} step={0.5} keyframe={kf('rotation')} onChange={(v, c) => anim('rotation', v, c)} />
+      <SliderField label={T("Opacity %")} value={tr.opacity} min={0} max={1} step={0.01} display={pct} parse={fromPct} keyframe={kf('opacity')} onChange={(v, c) => anim('opacity', v, c)} />
+      <SliderField label={T("Anchor X %")} value={base.anchorX} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorX: v }, c)} />
+      <SliderField label={T("Anchor Y %")} value={base.anchorY} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorY: v }, c)} />
+      {!inside && <p className="text-[11px] leading-snug text-muted">{T("Move the playhead over this clip to add keyframes.")}</p>}
     </Section>
   );
 }
@@ -179,24 +180,24 @@ function TransformTools({ clip, lt }: { clip: Clip; lt: number }) {
     <div className="mb-2 space-y-2">
       <div className="flex gap-1.5">
         <button className={btn} aria-pressed={!!clip.transform.flipH} onClick={() => patch((c) => ({ ...c, transform: { ...c.transform, flipH: !c.transform.flipH } }) as Clip)}>
-          <Icon name="flipH" size={15} /> Flip
+          <Icon name="flipH" size={15} /> {T('Flip')}
         </button>
         <button className={btn} aria-pressed={!!clip.transform.flipV} onClick={() => patch((c) => ({ ...c, transform: { ...c.transform, flipV: !c.transform.flipV } }) as Clip)}>
-          <Icon name="flipV" size={15} /> Flip
+          <Icon name="flipV" size={15} /> {T('Flip')}
         </button>
-        <button className={btn} onClick={() => fit('fit')}>Fit</button>
-        <button className={btn} onClick={() => fit('fill')}>Fill</button>
-        <button className={btn} onClick={() => fit('stretch')}>Stretch</button>
+        <button className={btn} onClick={() => fit('fit')}>{T("Fit")}</button>
+        <button className={btn} onClick={() => fit('fill')}>{T("Fill")}</button>
+        <button className={btn} onClick={() => fit('stretch')}>{T("Stretch")}</button>
       </div>
       <div className="flex items-center gap-3">
-        <span className="w-[64px] text-[12px] text-muted">Align</span>
-        <div className="grid grid-cols-3 gap-1" role="group" aria-label="Align in frame">
+        <span className="w-[64px] text-[12px] text-muted">{T("Align")}</span>
+        <div className="grid grid-cols-3 gap-1" role="group" aria-label={T("Align in frame")}>
           {([-1, 0, 1] as const).flatMap((vy) =>
             ([-1, 0, 1] as const).map((hx) => (
               <button
                 key={`${hx}${vy}`}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-line hover:border-accent"
-                aria-label={`Align ${vy < 0 ? 'top' : vy > 0 ? 'bottom' : 'middle'} ${hx < 0 ? 'left' : hx > 0 ? 'right' : 'center'}`}
+                aria-label={T('Align {v} {h}', { v: T(vy < 0 ? 'top' : vy > 0 ? 'bottom' : 'middle'), h: T(hx < 0 ? 'left' : hx > 0 ? 'right' : 'center') })}
                 onClick={() => align(hx, vy)}
               >
                 <span className="block h-1.5 w-1.5 rounded-full bg-muted" style={{ transform: `translate(${hx * 7}px, ${vy * 7}px)` }} />
@@ -224,7 +225,7 @@ function QuickAnimations({ clip }: { clip: Clip }) {
     <div className="space-y-1.5 pb-2">
       {(['in', 'out', 'whole'] as const).map((g) => (
         <div key={g} className="flex items-center gap-2">
-          <span className="w-[54px] shrink-0 text-[11px] text-muted">{g === 'in' ? 'In' : g === 'out' ? 'Out' : 'Whole clip'}</span>
+          <span className="w-[54px] shrink-0 text-[11px] text-muted">{T(g === 'in' ? 'In' : g === 'out' ? 'Out' : 'Whole clip')}</span>
           <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
             {ANIM_PRESETS.filter((p) => p.group === g).map((p) => (
               <button
@@ -232,7 +233,7 @@ function QuickAnimations({ clip }: { clip: Clip }) {
                 className="h-8 shrink-0 rounded-full border border-line px-3 text-[11.5px] hover:border-accent hover:text-accent"
                 onClick={() => patch((c) => applyAnimPreset(c, p.id, W, H))}
               >
-                {p.name}
+                {T(p.name)}
               </button>
             ))}
           </div>
@@ -248,11 +249,10 @@ function AnimationSection({ clip }: { clip: Clip }) {
   const times = keyframeTimes(clip);
   if (!times.length)
     return (
-      <Section title="Animation">
+      <Section title={T("Animation")}>
         <QuickAnimations clip={clip} />
         <p className="text-[11px] leading-snug text-muted">
-          Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at
-          another time to animate.
+          {T('Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at another time to animate.')}
         </p>
       </Section>
     );
@@ -266,36 +266,36 @@ function AnimationSection({ clip }: { clip: Clip }) {
   const seekLocal = (t: number) => engine.seek(clip.start + Math.min(Math.max(0, t), clip.duration - 1e-3));
   return (
     <Section
-      title={`Animation · ${times.length} keyframe${times.length === 1 ? '' : 's'}`}
-      action={<SaveButton label="Save animation as preset" onClick={() => savePreset('animation', clip.keyframes ?? {}, 'My animation')} />}
+      title={T('Animation · {n} keyframe(s)', { n: times.length })}
+      action={<SaveButton label={T("Save animation as preset")} onClick={() => savePreset('animation', clip.keyframes ?? {}, T('My animation'))} />}
     >
       <QuickAnimations clip={clip} />
       <div className="flex gap-2">
         <button className="field flex-1 text-[12px] disabled:opacity-40" disabled={prev === undefined} onClick={() => seekLocal(prev!)}>
-          ◂ Previous
+          {T('◂ Previous')}
         </button>
         <button className="field flex-1 text-[12px] disabled:opacity-40" disabled={next === undefined} onClick={() => seekLocal(next!)}>
-          Next ▸
+          {T('Next ▸')}
         </button>
       </div>
-      <Row label="Easing">
+      <Row label={T("Easing")}>
         <select
           className="field w-full"
-          aria-label="Keyframe easing"
+          aria-label={T("Keyframe easing")}
           disabled={atKf === undefined}
           value={easingAt ?? 'linear'}
           onChange={(e) => patch((c) => setEasingAt(c, atKf!, e.target.value as Easing))}
         >
           {EASINGS.map((e) => (
             <option key={e.value} value={e.value}>
-              {e.label}
+              {T(e.label)}
             </option>
           ))}
         </select>
       </Row>
-      {atKf === undefined && <p className="text-[11px] text-muted">Easing applies from the keyframe at the playhead.</p>}
+      {atKf === undefined && <p className="text-[11px] text-muted">{T("Easing applies from the keyframe at the playhead.")}</p>}
       <button className="mt-1 text-[12px] text-danger" onClick={() => patch((c) => clearAnimation(c))}>
-        Remove all keyframes
+        {T('Remove all keyframes')}
       </button>
     </Section>
   );
@@ -307,9 +307,9 @@ function TransitionInSection({ clip }: { clip: Clip }) {
   const track = project.tracks.find((t) => t.id === clip.trackId);
   if (!prev || !track || track.kind === 'audio') return null;
   return (
-    <Section title="Transition in">
+    <Section title={T("Transition in")}>
       <button className="field w-full text-[12px]" onClick={() => addTransition(clip.id)}>
-        {clip.transitionIn ? 'Edit transition from previous clip' : 'Add transition from previous clip'}
+        {T(clip.transitionIn ? 'Edit transition from previous clip' : 'Add transition from previous clip')}
       </button>
     </Section>
   );
@@ -328,22 +328,22 @@ function TransitionInspector({ clipId }: { clipId: string }) {
   return (
     <>
       <div className="border-b border-line/70 px-3 py-2.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">Transition</div>
-        <div className="text-[13px] font-medium">{TRANSITION_TYPES.find((x) => x.value === tr.type)?.label}</div>
-        {!prev && <div className="text-[11px] text-danger">Inactive: the clips no longer touch.</div>}
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">{T("Transition")}</div>
+        <div className="text-[13px] font-medium">{T(TRANSITION_TYPES.find((x) => x.value === tr.type)?.label ?? '')}</div>
+        {!prev && <div className="text-[11px] text-danger">{T("Inactive: the clips no longer touch.")}</div>}
       </div>
-      <Section title="Settings" action={<SaveButton label="Save transition as preset" onClick={() => savePreset('transition', tr, TRANSITION_TYPES.find((x) => x.value === tr.type)?.label ?? 'Transition')} />}>
-        <Row label="Type">
-          <select className="field w-full" aria-label="Transition type" value={tr.type} onChange={(e) => set({ type: e.target.value as TransitionType })}>
+      <Section title={T("Settings")} action={<SaveButton label={T("Save transition as preset")} onClick={() => savePreset('transition', tr, T(TRANSITION_TYPES.find((x) => x.value === tr.type)?.label ?? 'Transition'))} />}>
+        <Row label={T("Type")}>
+          <select className="field w-full" aria-label={T("Transition type")} value={tr.type} onChange={(e) => set({ type: e.target.value as TransitionType })}>
             {TRANSITION_TYPES.map((x) => (
               <option key={x.value} value={x.value}>
-                {x.label}
+                {T(x.label)}
               </option>
             ))}
           </select>
         </Row>
         <SliderField
-          label="Duration s"
+          label={T("Duration s")}
           value={Math.min(tr.duration, max)}
           min={0.1}
           max={Math.max(0.1, Math.min(4, max))}
@@ -351,9 +351,9 @@ function TransitionInspector({ clipId }: { clipId: string }) {
           onChange={(v, c) => set({ duration: v }, c)}
         />
         {TRANSITION_TYPES.find((x) => x.value === tr.type)?.directional && (
-          <Row label="Direction">
+          <Row label={T("Direction")}>
             <Segmented<Direction>
-              label="Direction"
+              label={T("Direction")}
               value={tr.direction}
               options={[
                 { value: 'left', label: '←' },
@@ -365,17 +365,17 @@ function TransitionInspector({ clipId }: { clipId: string }) {
             />
           </Row>
         )}
-        <Row label="Easing">
-          <select className="field w-full" aria-label="Transition easing" value={tr.easing} onChange={(e) => set({ easing: e.target.value as Easing })}>
+        <Row label={T("Easing")}>
+          <select className="field w-full" aria-label={T("Transition easing")} value={tr.easing} onChange={(e) => set({ easing: e.target.value as Easing })}>
             {EASINGS.map((e) => (
               <option key={e.value} value={e.value}>
-                {e.label}
+                {T(e.label)}
               </option>
             ))}
           </select>
         </Row>
         <button className="mt-1 text-[12px] text-danger" onClick={() => removeTransition(clipId)}>
-          Remove transition (cut)
+          {T('Remove transition (cut)')}
         </button>
       </Section>
     </>
@@ -400,11 +400,11 @@ function CropSection({ clip }: { clip: MediaClip }) {
     />
   );
   return (
-    <Section title="Crop" action={<ResetButton label="Reset crop" onClick={() => set({ top: 0, right: 0, bottom: 0, left: 0 }, true)} />}>
-      {side('left', 'Left %', 'right')}
-      {side('right', 'Right %', 'left')}
-      {side('top', 'Top %', 'bottom')}
-      {side('bottom', 'Bottom %', 'top')}
+    <Section title={T("Crop")} action={<ResetButton label={T("Reset crop")} onClick={() => set({ top: 0, right: 0, bottom: 0, left: 0 }, true)} />}>
+      {side('left', T('Left %'), 'right')}
+      {side('right', T('Right %'), 'left')}
+      {side('top', T('Top %'), 'bottom')}
+      {side('bottom', T('Bottom %'), 'top')}
     </Section>
   );
 }
@@ -417,21 +417,21 @@ function EffectsSection({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
   const thumb = asset?.thumbUrl;
   return (
     <Section
-      title="Color & Effects"
+      title={T("Color & Effects")}
       action={
         <div className="flex">
-          <SaveButton label="Save effects as preset" onClick={() => savePreset('effects', e, 'My look')} />
-          <ResetButton label="Reset effects" onClick={() => set(defaultEffects(), true)} />
+          <SaveButton label={T("Save effects as preset")} onClick={() => savePreset('effects', e, T('My look'))} />
+          <ResetButton label={T("Reset effects")} onClick={() => set(defaultEffects(), true)} />
         </div>
       }
     >
       {off && (
         <p className="pb-1 text-[11px] leading-snug text-muted">
-          This browser does not support canvas filters, so color effects are unavailable here.
+          {T('This browser does not support canvas filters, so color effects are unavailable here.')}
         </p>
       )}
       {!off && (
-        <div className="no-scrollbar -mx-3 mb-1 flex gap-2 overflow-x-auto px-3 pb-1" role="listbox" aria-label="Looks">
+        <div className="no-scrollbar -mx-3 mb-1 flex gap-2 overflow-x-auto px-3 pb-1" role="listbox" aria-label={T("Looks")}>
           {LOOKS.map((l) => {
             const fx = lookEffects(l.id);
             return (
@@ -439,7 +439,7 @@ function EffectsSection({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
                 key={l.id}
                 className="flex w-[64px] shrink-0 flex-col items-center gap-1 text-[10.5px] text-muted hover:text-text"
                 onClick={() => set(fx, true)}
-                aria-label={`Look ${l.name}`}
+                aria-label={T('Look {name}', { name: T(l.name) })}
               >
                 <span
                   className="block h-11 w-16 overflow-hidden rounded-md border border-line bg-elevated"
@@ -450,20 +450,20 @@ function EffectsSection({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
                     filter: filterString(fx, null, 0.2),
                   }}
                 />
-                {l.name}
+                {T(l.name)}
               </button>
             );
           })}
         </div>
       )}
-      <SliderField disabled={off} label="Brightness" value={e.brightness} min={0} max={200} onChange={(v, c) => set({ brightness: v }, c)} />
-      <SliderField disabled={off} label="Contrast" value={e.contrast} min={0} max={200} onChange={(v, c) => set({ contrast: v }, c)} />
-      <SliderField disabled={off} label="Saturation" value={e.saturation} min={0} max={200} onChange={(v, c) => set({ saturation: v }, c)} />
-      <SliderField disabled={off} label="Hue °" value={e.hue} min={-180} max={180} onChange={(v, c) => set({ hue: v }, c)} />
-      <SliderField disabled={off} label="Warmth" value={e.sepia} min={0} max={100} onChange={(v, c) => set({ sepia: v }, c)} />
-      <SliderField disabled={off} label="Grayscale" value={e.grayscale} min={0} max={100} onChange={(v, c) => set({ grayscale: v }, c)} />
-      <SliderField disabled={off} label="Vignette" value={e.vignette} min={0} max={100} onChange={(v, c) => set({ vignette: v }, c)} />
-      <SliderField disabled={off} label="Blur px" value={e.blur} min={0} max={40} step={0.5} onChange={(v, c) => set({ blur: v }, c)} />
+      <SliderField disabled={off} label={T("Brightness")} value={e.brightness} min={0} max={200} onChange={(v, c) => set({ brightness: v }, c)} />
+      <SliderField disabled={off} label={T("Contrast")} value={e.contrast} min={0} max={200} onChange={(v, c) => set({ contrast: v }, c)} />
+      <SliderField disabled={off} label={T("Saturation")} value={e.saturation} min={0} max={200} onChange={(v, c) => set({ saturation: v }, c)} />
+      <SliderField disabled={off} label={T("Hue °")} value={e.hue} min={-180} max={180} onChange={(v, c) => set({ hue: v }, c)} />
+      <SliderField disabled={off} label={T("Warmth")} value={e.sepia} min={0} max={100} onChange={(v, c) => set({ sepia: v }, c)} />
+      <SliderField disabled={off} label={T("Grayscale")} value={e.grayscale} min={0} max={100} onChange={(v, c) => set({ grayscale: v }, c)} />
+      <SliderField disabled={off} label={T("Vignette")} value={e.vignette} min={0} max={100} onChange={(v, c) => set({ vignette: v }, c)} />
+      <SliderField disabled={off} label={T("Blur px")} value={e.blur} min={0} max={40} step={0.5} onChange={(v, c) => set({ blur: v }, c)} />
     </Section>
   );
 }
@@ -475,10 +475,10 @@ function AudioSection({ clip }: { clip: MediaClip }) {
     patch((c) => ({ ...(c as MediaClip), audio: { ...(c as MediaClip).audio, ...p } }), commit);
   const maxFade = Math.max(0, clip.duration / 2);
   return (
-    <Section title="Audio" action={<ResetButton label="Reset audio" onClick={() => set(defaultAudio(), true)} />}>
-      <SliderField label="Volume %" value={a.volume} min={0} max={2} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ volume: v }, c)} />
+    <Section title={T("Audio")} action={<ResetButton label={T("Reset audio")} onClick={() => set(defaultAudio(), true)} />}>
+      <SliderField label={T("Volume %")} value={a.volume} min={0} max={2} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ volume: v }, c)} />
       <SliderField
-        label="Pan"
+        label={T("Pan")}
         value={a.pan}
         min={-1}
         max={1}
@@ -494,11 +494,11 @@ function AudioSection({ clip }: { clip: MediaClip }) {
       />
       {clip.type === 'media' && useMediaStore.getState().assets[clip.assetId]?.kind === 'video' && !isOnAudioTrack(clip) && (
         <button className="field mb-1 w-full text-[12px]" onClick={() => extractAudio(clip.id)}>
-          Extract audio to its own track
+          {T('Extract audio to its own track')}
         </button>
       )}
-      <SliderField label="Fade in s" value={a.fadeIn} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeIn: v }, c)} />
-      <SliderField label="Fade out s" value={a.fadeOut} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeOut: v }, c)} />
+      <SliderField label={T("Fade in s")} value={a.fadeIn} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeIn: v }, c)} />
+      <SliderField label={T("Fade out s")} value={a.fadeOut} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeOut: v }, c)} />
     </Section>
   );
 }
@@ -507,11 +507,11 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
 function SpeedSection({ clip }: { clip: MediaClip }) {
   return (
-    <Section title="Speed">
-      <Row label="Speed">
+    <Section title={T("Speed")}>
+      <Row label={T("Speed")}>
         <select
           className="field w-full"
-          aria-label="Playback speed"
+          aria-label={T("Playback speed")}
           value={clip.speed}
           onChange={(e) => {
             const speed = parseFloat(e.target.value);
@@ -525,7 +525,7 @@ function SpeedSection({ clip }: { clip: MediaClip }) {
           ))}
         </select>
       </Row>
-      <p className="text-[11px] leading-snug text-muted">Audio pitch is preserved where the browser supports it.</p>
+      <p className="text-[11px] leading-snug text-muted">{T("Audio pitch is preserved where the browser supports it.")}</p>
     </Section>
   );
 }
@@ -538,12 +538,12 @@ function TextSection({ clip }: { clip: TextClip }) {
   const set = (p: Partial<TextClip['style']>, commit = true) =>
     patch((c) => ({ ...(c as TextClip), style: { ...(c as TextClip).style, ...p } }), commit);
   return (
-    <Section title="Text" action={<SaveButton label="Save text style as preset" onClick={() => savePreset('textStyle', s, 'My text style')} />}>
+    <Section title={T("Text")} action={<SaveButton label={T("Save text style as preset")} onClick={() => savePreset('textStyle', s, T('My text style'))} />}>
       <textarea
         className="field !h-auto min-h-[64px] w-full resize-y py-1.5 text-[13px]"
         dir="auto"
         value={clip.text}
-        aria-label="Text content"
+        aria-label={T("Text content")}
         onFocus={() => useProjectStore.getState().begin()}
         onBlur={() => useProjectStore.getState().end()}
         onKeyDown={(e) => e.stopPropagation()}
@@ -552,11 +552,11 @@ function TextSection({ clip }: { clip: TextClip }) {
           patch((c) => ({ ...(c as TextClip), text }), false);
         }}
       />
-      <Row label="Font">
+      <Row label={T("Font")}>
         <select
           className="field w-full"
           value={s.fontFamily}
-          aria-label="Font"
+          aria-label={T("Font")}
           onChange={(e) => {
             const fontFamily = e.target.value;
             void ensureFont(fontFamily);
@@ -564,7 +564,7 @@ function TextSection({ clip }: { clip: TextClip }) {
           }}
         >
           {(['arabic', 'latin', 'system'] as const).map((g) => (
-            <optgroup key={g} label={g === 'arabic' ? 'عربي · Arabic' : g === 'latin' ? 'Latin' : 'System'}>
+            <optgroup key={g} label={g === 'arabic' ? 'عربي · Arabic' : T(g === 'latin' ? 'Latin' : 'System')}>
               {FONTS.filter((f) => f.script === g).map((f) => (
                 <option key={f.family} value={f.family}>
                   {f.label}
@@ -574,10 +574,10 @@ function TextSection({ clip }: { clip: TextClip }) {
           ))}
         </select>
       </Row>
-      <SliderField label="Size px" value={s.fontSize} min={12} max={400} onChange={(v, c) => set({ fontSize: v }, c)} />
-      <Row label="Weight">
+      <SliderField label={T("Size px")} value={s.fontSize} min={12} max={400} onChange={(v, c) => set({ fontSize: v }, c)} />
+      <Row label={T("Weight")}>
         <Segmented
-          label="Font weight"
+          label={T("Font weight")}
           value={s.fontWeight}
           options={[
             { value: 400, label: 'Regular' },
@@ -587,9 +587,9 @@ function TextSection({ clip }: { clip: TextClip }) {
           onChange={(v) => set({ fontWeight: v })}
         />
       </Row>
-      <Row label="Align">
+      <Row label={T("Align")}>
         <Segmented
-          label="Alignment"
+          label={T("Alignment")}
           value={s.align}
           options={[
             { value: 'left', label: 'Left' },
@@ -599,21 +599,21 @@ function TextSection({ clip }: { clip: TextClip }) {
           onChange={(v) => set({ align: v })}
         />
       </Row>
-      <Row label="Color">
-        <input type="color" className="h-8 w-12 rounded border border-line bg-transparent" value={s.color} aria-label="Text color" onChange={(e) => set({ color: e.target.value })} />
+      <Row label={T("Color")}>
+        <input type="color" className="h-8 w-12 rounded border border-line bg-transparent" value={s.color} aria-label={T("Text color")} onChange={(e) => set({ color: e.target.value })} />
         <span className="tnum text-[12px] text-muted">{s.color.toUpperCase()}</span>
       </Row>
-      <Row label="Shadow">
-        <Toggle label="Text shadow" checked={s.shadow} onChange={(v) => set({ shadow: v })} />
+      <Row label={T("Shadow")}>
+        <Toggle label={T("Text shadow")} checked={s.shadow} onChange={(v) => set({ shadow: v })} />
       </Row>
-      <Row label="Background">
-        <Toggle label="Text background" checked={!!s.background} onChange={(v) => set({ background: v ? '#15191DCC' : null })} />
+      <Row label={T("Background")}>
+        <Toggle label={T("Text background")} checked={!!s.background} onChange={(v) => set({ background: v ? '#15191DCC' : null })} />
         {s.background && (
           <input
             type="color"
             className="h-8 w-12 rounded border border-line bg-transparent"
             value={s.background.slice(0, 7)}
-            aria-label="Background color"
+            aria-label={T("Background color")}
             onChange={(e) => set({ background: `${e.target.value}CC` })}
           />
         )}
@@ -624,16 +624,16 @@ function TextSection({ clip }: { clip: TextClip }) {
 
 function ClipHeader({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
   const fps = useProjectStore((s) => s.project.settings.fps);
-  const kind = clip.type === 'text' ? 'Text' : asset?.kind === 'audio' ? 'Audio' : asset?.kind === 'image' ? 'Image' : 'Video';
+  const kind = T(clip.type === 'text' ? 'Text' : asset?.kind === 'audio' ? 'Audio' : asset?.kind === 'image' ? 'Image' : 'Video');
   return (
     <div className="border-b border-line/70 px-3 py-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">{kind} clip</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">{T('{kind} clip', { kind })}</div>
       <div className="truncate text-[13px] font-medium" title={asset?.name}>
-        {clip.type === 'text' ? clip.text.split('\n')[0] || 'Text' : asset?.name ?? 'Missing media'}
+        {clip.type === 'text' ? clip.text.split('\n')[0] || T('Text') : asset?.name ?? T('Missing media')}
       </div>
       <div className="tnum mt-0.5 text-[11px] text-muted">
-        Start {formatTimecode(clip.start, fps)} · Duration {formatTimecode(clip.duration, fps)}
-        {clip.type === 'media' && asset && asset.kind !== 'image' ? ` · In ${formatTimecode(clip.in, fps)}` : ''}
+        {T('Start {start} · Duration {dur}', { start: formatTimecode(clip.start, fps), dur: formatTimecode(clip.duration, fps) })}
+        {clip.type === 'media' && asset && asset.kind !== 'image' ? T(' · In {t}', { t: formatTimecode(clip.in, fps) }) : ''}
       </div>
     </div>
   );
@@ -651,20 +651,20 @@ function ProjectInspector() {
   return (
     <>
       <div className="border-b border-line/70 px-3 py-2.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">Project</div>
-        <div className="text-[12px] text-muted">Select a clip to edit its properties.</div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">{T("Project")}</div>
+        <div className="text-[12px] text-muted">{T("Select a clip to edit its properties.")}</div>
       </div>
-      <Section title="Format">
-        <Row label="Aspect">
-          <select className="field w-full" aria-label="Aspect ratio" value={settings.aspect} onChange={(e) => set({ aspect: e.target.value as ProjectSettings['aspect'] })}>
+      <Section title={T("Format")}>
+        <Row label={T("Aspect")}>
+          <select className="field w-full" aria-label={T("Aspect ratio")} value={settings.aspect} onChange={(e) => set({ aspect: e.target.value as ProjectSettings['aspect'] })}>
             {['16:9', '9:16', '1:1', '4:5', '4:3'].map((a) => (
               <option key={a}>{a}</option>
             ))}
           </select>
         </Row>
-        <Row label="Resolution">
+        <Row label={T("Resolution")}>
           <Segmented
-            label="Resolution"
+            label={T("Resolution")}
             value={settings.resolution}
             options={[
               { value: 720, label: '720p' },
@@ -673,27 +673,27 @@ function ProjectInspector() {
             onChange={(v) => set({ resolution: v })}
           />
         </Row>
-        <Row label="Frame rate">
+        <Row label={T("Frame rate")}>
           <Segmented
-            label="Frame rate"
+            label={T("Frame rate")}
             value={settings.fps}
             options={[24, 25, 30, 60].map((f) => ({ value: f as ProjectSettings['fps'], label: `${f}` }))}
             onChange={(v) => set({ fps: v })}
           />
         </Row>
-        <Row label="Frame">
+        <Row label={T("Frame")}>
           <span className="tnum text-[12px] text-text/80">
             {width} × {height}
           </span>
         </Row>
-        <Row label="Background">
-          <input type="color" className="h-8 w-12 rounded border border-line bg-transparent" aria-label="Background color" value={settings.background} onChange={(e) => set({ background: e.target.value })} />
+        <Row label={T("Background")}>
+          <input type="color" className="h-8 w-12 rounded border border-line bg-transparent" aria-label={T("Background color")} value={settings.background} onChange={(e) => set({ background: e.target.value })} />
         </Row>
       </Section>
-      <Section title="Preview">
-        <Row label="Quality">
+      <Section title={T("Preview")}>
+        <Row label={T("Quality")}>
           <Segmented<PreviewQuality>
-            label="Preview quality"
+            label={T("Preview quality")}
             value={quality}
             options={[
               { value: 'full', label: 'Full' },
@@ -703,9 +703,9 @@ function ProjectInspector() {
             onChange={(v) => setUI({ quality: v })}
           />
         </Row>
-        <Row label="Renderer">
+        <Row label={T("Renderer")}>
           <Segmented<PreviewRenderer>
-            label="Preview renderer"
+            label={T("Preview renderer")}
             value={renderer}
             options={[
               { value: 'gpu', label: 'GPU (smooth)' },
@@ -714,8 +714,8 @@ function ProjectInspector() {
             onChange={(v) => setUI({ renderer: v })}
           />
         </Row>
-        <Row label="Perf stats">
-          <Toggle label="Show performance stats" checked={showStats} onChange={(v) => setUI({ showStats: v })} />
+        <Row label={T("Perf stats")}>
+          <Toggle label={T("Show performance stats")} checked={showStats} onChange={(v) => setUI({ showStats: v })} />
         </Row>
         <p className="text-[11px] leading-snug text-muted">GPU shows video directly through the browser compositor (smoothest). Quality applies to the Canvas renderer.</p>
       </Section>
@@ -742,7 +742,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
         <EffectsSection clip={clip} asset={asset} />
       </>
     );
-  else if (!asset) body = <p className="p-3 text-[12px] text-muted">The media for this clip was removed.</p>;
+  else if (!asset) body = <p className="p-3 text-[12px] text-muted">{T("The media for this clip was removed.")}</p>;
   else if (asset.kind === 'audio' || onAudioTrack)
     body = (
       <>
@@ -766,9 +766,9 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="inspector">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Inspector</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{T("Inspector")}</h2>
         {onClose && (
-          <button className="icon-btn !h-8 !min-w-8" aria-label="Close inspector" onClick={onClose}>
+          <button className="icon-btn !h-8 !min-w-8" aria-label={T("Close inspector")} onClick={onClose}>
             <Icon name="close" size={16} />
           </button>
         )}

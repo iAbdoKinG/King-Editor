@@ -11,6 +11,7 @@
  *
  * Nothing leaves the device.
  */
+import { t as T } from '../../i18n';
 import {
   ALL_FORMATS,
   AudioBufferSink,
@@ -36,11 +37,11 @@ import { imageFrame, renderFrame, visibleLayersAt, type Frame, type FrameSource 
 import { imageCache } from '../../engine/rendering/imageCache';
 import { frameSize, projectDuration, trackGain } from '../../engine/timeline/model';
 import { clipRange, trackLayersAt } from '../../engine/timeline/transitions';
-import { getAssetFile } from '../../stores/mediaStore';
+import { getAssetData, makeSource, readAll } from '../media/assetSource';
 import { clamp } from '../../utils/time';
 
 export interface ExportSettings {
-  height: 720 | 1080;
+  height: 720 | 1080 | 2160;
   fps: 24 | 25 | 30 | 60;
 }
 
@@ -85,9 +86,9 @@ export async function planExport(
   settings: ExportSettings,
 ): Promise<ExportPlan | { error: string }> {
   const duration = projectDuration(project);
-  if (duration <= 0) return { error: 'The timeline is empty.' };
+  if (duration <= 0) return { error: T('The timeline is empty.') };
   if (typeof (window as unknown as { VideoEncoder?: unknown }).VideoEncoder !== 'function')
-    return { error: 'This browser has no video encoder (WebCodecs). Use Safari on iPadOS 16.4 or newer, or a current Chrome/Edge.' };
+    return { error: T('This browser has no video encoder (WebCodecs). Use Safari on iPadOS 16.4 or newer, or a current Chrome/Edge.') };
   const { width, height } = frameSize({ aspect: project.settings.aspect, resolution: settings.height });
   const needAudio = hasAudibleAudio(project, assets);
   const candidates: Array<{ container: 'mp4' | 'webm'; video: VideoCodec; audio: AudioCodec[] }> = [
@@ -111,7 +112,7 @@ export async function planExport(
     }
     return { width, height, fps: settings.fps, container: c.container, videoCodec: c.video, audioCodec, duration };
   }
-  return { error: `This browser cannot encode ${width}×${height} video${needAudio ? ' with audio' : ''}. Try 720p.` };
+  return { error: T('This browser cannot encode {w}×{h} video{audio}. Try 720p.', { w: width, h: height, audio: needAudio ? T(' with audio') : '' }) };
 }
 
 /* ----------------------------- video frames ----------------------------- */
@@ -175,11 +176,11 @@ class ExportFrames implements FrameSource {
 
   private async open(clip: MediaClip): Promise<DecoderEntry | ElementEntry> {
     const asset = this.assets[clip.assetId];
-    const file = getAssetFile(asset.id);
+    const data = getAssetData(asset.id);
     const plan = this.plan.get(clip.id)!;
-    if (file) {
+    if (data) {
       try {
-        const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+        const input = new Input({ source: await makeSource(data), formats: ALL_FORMATS });
         const track = await input.getPrimaryVideoTrack();
         if (track && (await track.canDecode())) {
           const sink = new VideoSampleSink(track);
@@ -262,11 +263,11 @@ class ExportFrames implements FrameSource {
 /* ----------------------------- audio mix ----------------------------- */
 
 async function decodeRange(asset: MediaAsset, from: number, to: number, ctx: BaseAudioContext): Promise<{ buffer: AudioBuffer; start: number } | null> {
-  const file = getAssetFile(asset.id);
-  if (!file) return null;
+  const data = getAssetData(asset.id);
+  if (!data) return null;
   // Preferred: decode only the needed range with WebCodecs.
   try {
-    const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+    const input = new Input({ source: await makeSource(data), formats: ALL_FORMATS });
     try {
       const track = await input.getPrimaryAudioTrack();
       if (!track) return null; // video without audio
@@ -293,7 +294,7 @@ async function decodeRange(asset: MediaAsset, from: number, to: number, ctx: Bas
   }
   // Fallback: let Web Audio decode the whole file.
   try {
-    const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    const buffer = await ctx.decodeAudioData(await readAll(data));
     return { buffer, start: 0 };
   } catch {
     return null;
@@ -424,7 +425,7 @@ export async function runExport(
   }
 
   const buf = (output.target as BufferTarget).buffer;
-  if (!buf || buf.byteLength === 0) throw new Error('The encoder produced an empty file.');
+  if (!buf || buf.byteLength === 0) throw new Error(T('The encoder produced an empty file.'));
   const mime = plan.container === 'mp4' ? 'video/mp4' : 'video/webm';
   const blob = new Blob([buf], { type: mime });
 
@@ -434,10 +435,10 @@ export async function runExport(
   let verifiedDuration = 0;
   try {
     const vt = await check.getPrimaryVideoTrack();
-    if (!vt) throw new Error('The exported file has no video track.');
-    if (plan.audioCodec && !(await check.getPrimaryAudioTrack())) throw new Error('The exported file is missing its audio track.');
+    if (!vt) throw new Error(T('The exported file has no video track.'));
+    if (plan.audioCodec && !(await check.getPrimaryAudioTrack())) throw new Error(T('The exported file is missing its audio track.'));
     verifiedDuration = await check.computeDuration();
-    if (!(verifiedDuration > plan.duration * 0.9)) throw new Error(`The exported file is too short (${verifiedDuration.toFixed(2)} s).`);
+    if (!(verifiedDuration > plan.duration * 0.9)) throw new Error(T('The exported file is too short ({d} s).', { d: verifiedDuration.toFixed(2) }));
   } finally {
     check.dispose();
   }

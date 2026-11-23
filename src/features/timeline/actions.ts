@@ -3,6 +3,7 @@
  * context menus and touch gestures (one implementation for every input type).
  */
 import { engine } from '../../engine/playback/engine';
+import { t as T } from '../../i18n';
 import { clipEnd, createMediaClip, createTextClip, trackKindForAsset } from '../../engine/timeline/model';
 import {
   deleteClips,
@@ -33,7 +34,7 @@ export function addAssetToTimeline(assetId: string, at?: number, trackId?: strin
   const asset = useMediaStore.getState().assets[assetId];
   if (!asset) return;
   if (asset.status !== 'ready') {
-    toast(asset.status === 'error' ? `${asset.name} can't be used: ${asset.error}` : 'Still reading this file…', 'error');
+    toast(asset.status === 'error' ? T('{name} can’t be used: {error}', { name: asset.name, error: T(asset.error ?? '') }) : 'Still reading this file…', 'error');
     return;
   }
   let newId = '';

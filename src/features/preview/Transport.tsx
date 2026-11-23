@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { t as T } from '../../i18n';
 import { Icon } from '../../components/Icon';
 import { engine } from '../../engine/playback/engine';
 import { useProjectStore } from '../../stores/projectStore';
@@ -50,32 +51,32 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
   const setUI = useUIStore((s) => s.set);
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-1 border-t border-line bg-surface px-2">
+    <div className="flex h-12 shrink-0 items-center gap-1 border-t border-line bg-surface px-2" dir="ltr">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <Timecode compact={compact} />
       </div>
       <div className="flex shrink-0 items-center">
         {!compact && (
-          <button className="icon-btn" aria-label="Go to start" onClick={() => engine.seek(0)}>
+          <button className="icon-btn" aria-label={T("Go to start")} onClick={() => engine.seek(0)}>
             <Icon name="toStart" size={18} />
           </button>
         )}
-        <button className="icon-btn" aria-label="Previous frame" onClick={() => stepFrames(-1)}>
+        <button className="icon-btn" aria-label={T("Previous frame")} onClick={() => stepFrames(-1)}>
           <Icon name="stepBack" size={18} />
         </button>
         <button
           className="icon-btn mx-1 !h-11 !w-11 rounded-full bg-text !text-bg hover:opacity-90"
-          aria-label={playing ? 'Pause' : 'Play'}
+          aria-label={T(playing ? 'Pause' : 'Play')}
           data-testid="play-toggle"
           onClick={togglePlay}
         >
           <Icon name={playing ? 'pause' : 'play'} size={20} />
         </button>
-        <button className="icon-btn" aria-label="Next frame" onClick={() => stepFrames(1)}>
+        <button className="icon-btn" aria-label={T("Next frame")} onClick={() => stepFrames(1)}>
           <Icon name="stepFwd" size={18} />
         </button>
         {!compact && (
-          <button className="icon-btn" aria-label="Forward 1 second" onClick={() => seekBy(1)}>
+          <button className="icon-btn" aria-label={T("Forward 1 second")} onClick={() => seekBy(1)}>
             <span className="text-[11px] font-semibold">+1s</span>
           </button>
         )}
@@ -83,7 +84,7 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
         <select
           className="field !h-8 !w-auto !pr-1 text-[12px]"
-          aria-label="Aspect ratio"
+          aria-label={T("Aspect ratio")}
           value={aspect}
           onChange={(e) => apply((p) => ({ ...p, settings: { ...p.settings, aspect: e.target.value as AspectPreset } }))}
         >
@@ -94,16 +95,16 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
         {!compact && renderer === 'canvas' && (
           <select
             className="field !h-8 !w-auto !pr-1 text-[12px]"
-            aria-label="Preview quality"
+            aria-label={T("Preview quality")}
             value={quality}
             onChange={(e) => setUI({ quality: e.target.value as PreviewQuality })}
           >
-            <option value="full">Full</option>
-            <option value="half">Half</option>
-            <option value="quarter">Quarter</option>
+            <option value="full">{T("Full")}</option>
+            <option value="half">{T("Half")}</option>
+            <option value="quarter">{T("Quarter")}</option>
           </select>
         )}
-        <button className="icon-btn" aria-label="Fullscreen preview" onClick={onFullscreen}>
+        <button className="icon-btn" aria-label={T("Fullscreen preview")} onClick={onFullscreen}>
           <Icon name="fullscreen" size={17} />
         </button>
       </div>

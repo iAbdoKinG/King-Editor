@@ -1,3 +1,4 @@
+import { t as T } from '../../i18n';
 import type {
   AspectPreset,
   AudioProps,
@@ -40,13 +41,13 @@ export function defaultAudio(): AudioProps {
 }
 
 export function defaultSettings(): ProjectSettings {
-  return { name: 'Untitled Project', aspect: '16:9', resolution: 1080, fps: 30, background: '#000000' };
+  return { name: T('Untitled Project'), aspect: '16:9', resolution: 1080, fps: 30, background: '#000000' };
 }
 
 export function createTrack(kind: TrackKind, existing: Track[]): Track {
   const n = existing.filter((t) => t.kind === kind).length + 1;
-  const label = kind === 'video' ? 'Video' : kind === 'audio' ? 'Audio' : 'Text';
-  return { id: uid('trk'), kind, name: `${label} ${n}`, muted: false, hidden: false };
+  const label = kind === 'video' ? 'Video {n}' : kind === 'audio' ? 'Audio {n}' : 'Text {n}';
+  return { id: uid('trk'), kind, name: T(label, { n }), muted: false, hidden: false };
 }
 
 export function createProject(): Project {
@@ -57,7 +58,7 @@ export function createProject(): Project {
 }
 
 /** Project frame size in pixels for the chosen aspect ratio and short-edge resolution. */
-export function frameSize(settings: Pick<ProjectSettings, 'aspect' | 'resolution'>): { width: number; height: number } {
+export function frameSize(settings: { aspect: ProjectSettings['aspect']; resolution: number }): { width: number; height: number } {
   const ratios: Record<AspectPreset, [number, number]> = {
     '16:9': [16, 9],
     '9:16': [9, 16],
@@ -125,7 +126,7 @@ export function createMediaClip(asset: MediaAsset, trackId: string, start: numbe
   };
 }
 
-export function createTextClip(trackId: string, start: number, text = 'Your title'): TextClip {
+export function createTextClip(trackId: string, start: number, text = T('Your title')): TextClip {
   return {
     id: uid('clp'),
     type: 'text',
