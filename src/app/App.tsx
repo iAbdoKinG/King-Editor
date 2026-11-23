@@ -4,6 +4,9 @@ import { Header } from '../components/Header';
 import { Icon } from '../components/Icon';
 import { StatsOverlay } from '../components/StatsOverlay';
 import { Toasts } from '../components/Toasts';
+import { ThemeDialog } from '../components/ThemeDialog';
+import { AdvisorBanner } from '../features/advisor/AdvisorBanner';
+import { PresetLinkImport, PresetsDialog } from '../features/presets/PresetsDialog';
 import { ExportDialog } from '../features/export/ExportDialog';
 import { Inspector } from '../features/inspector/Inspector';
 import { MediaLibrary } from '../features/media/MediaLibrary';
@@ -160,6 +163,10 @@ export function App() {
       {mode === 'wide' ? <WideLayout /> : <CompactLayout landscape={landscape} />}
       <ClipContextMenu compact={mode === 'compact'} />
       <ExportDialog />
+      <ThemeDialog />
+      <PresetsDialog />
+      <PresetLinkImport />
+      <AdvisorBanner />
       <Toasts />
     </>
   );

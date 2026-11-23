@@ -32,7 +32,7 @@ export function defaultTransform(): Transform {
 }
 
 export function defaultEffects(): Effects {
-  return { brightness: 100, contrast: 100, saturation: 100, blur: 0 };
+  return { brightness: 100, contrast: 100, saturation: 100, blur: 0, hue: 0, sepia: 0, grayscale: 0, vignette: 0 };
 }
 
 export function defaultAudio(): AudioProps {
@@ -76,6 +76,13 @@ export function frameSize(settings: Pick<ProjectSettings, 'aspect' | 'resolution
 
 export function trackKindForAsset(asset: MediaAsset): TrackKind {
   return asset.kind === 'audio' ? 'audio' : 'video';
+}
+
+/** Effective audio gain of a track: mute, solo and track volume combined. */
+export function trackGain(project: Project, track: Track | undefined): number {
+  if (!track || track.muted) return 0;
+  if (project.tracks.some((t) => t.solo) && !track.solo) return 0;
+  return track.volume ?? 1;
 }
 
 export function clipEnd(c: Clip): number {

@@ -7,30 +7,30 @@
  *   video → the pooled <video> element itself (zero-copy)
  *   image → <img>
  *   text  → a small canvas, redrawn only when the text or style changes
- * Transforms, keyframes, transitions, crop, opacity and filters are expressed
- * as CSS using the same geometry as the canvas compositor (used for export),
- * so both renderers produce the same picture.
+ * Transforms, keyframes, transitions (incl. clip regions), crop, opacity,
+ * filters and vignette are expressed as CSS using the same geometry and
+ * filter strings as the canvas compositor (used for export).
+ *
+ * DOM per layer:  outer (frame-sized, clip-path) › wrap (transformed box) › media
  */
-import type { Clip, Effects, MediaAsset, Project, TextClip } from '../../types/project';
+import type { Clip, MediaAsset, Project, TextClip } from '../../types/project';
 import type { MediaPool } from '../playback/mediaPool';
 import { resolveTransform } from '../timeline/animation';
 import { frameSize } from '../timeline/model';
 import type { Mix } from '../timeline/transitions';
 import { visibleLayersAt } from './compositor';
+import { filterString, vignetteGradient } from './filters';
 import { clipBox, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD, type ClipBox } from './geometry';
+import { useFontStore } from '../../features/fonts/fonts';
+import { isRtl } from '../../utils/text';
 
-function cssFilter(e: Effects): string {
-  const parts: string[] = [];
-  if (e.brightness !== 100) parts.push(`brightness(${e.brightness}%)`);
-  if (e.contrast !== 100) parts.push(`contrast(${e.contrast}%)`);
-  if (e.saturation !== 100) parts.push(`saturate(${e.saturation}%)`);
-  // Local units are project pixels (scaling happens in the transform), so blur matches export.
-  if (e.blur > 0) parts.push(`blur(${e.blur.toFixed(2)}px)`);
-  return parts.length ? parts.join(' ') : 'none';
+interface LayerEls {
+  outer: HTMLDivElement;
+  wrap: HTMLDivElement;
+  vig?: HTMLDivElement;
 }
 
-interface StaticWrap {
-  wrap: HTMLDivElement;
+interface StaticEls extends LayerEls {
   kind: 'image' | 'text';
   key: string;
   canvas?: HTMLCanvasElement;
@@ -44,17 +44,28 @@ function setStyle(el: HTMLElement, prop: string, value: string): void {
 }
 
 function layerMatrix(k: number, W: number, H: number, mix: Mix, box: ClipBox): string {
-  const ms = mix.scale;
-  const m = new DOMMatrix([k * ms, 0, 0, k * ms, k * ((W / 2) * (1 - ms) + mix.dx), k * ((H / 2) * (1 - ms) + mix.dy)]);
-  m.translateSelf(box.cx, box.cy);
+  const m = new DOMMatrix([k, 0, 0, k, 0, 0]);
+  m.translateSelf(W / 2 + mix.dx, H / 2 + mix.dy);
+  if (mix.rotate) m.rotateSelf(mix.rotate);
+  m.scaleSelf(mix.scale, mix.scale);
+  m.translateSelf(-W / 2 + box.cx, -H / 2 + box.cy);
   m.rotateSelf((box.rot * 180) / Math.PI);
   m.scaleSelf(box.sx, box.sy);
   m.translateSelf(-box.w * box.ax, -box.h * box.ay);
   return `matrix(${m.a},${m.b},${m.c},${m.d},${m.e},${m.f})`;
 }
 
+function clipPath(mix: Mix, cssW: number, cssH: number): string {
+  const c = mix.clip;
+  if (!c) return 'none';
+  if (c.kind === 'inset') return `inset(${c.top * 100}% ${c.right * 100}% ${c.bottom * 100}% ${c.left * 100}%)`;
+  return `circle(${((c.r * Math.hypot(cssW, cssH)) / 2).toFixed(2)}px at 50% 50%)`;
+}
+
+const slotEls = new WeakMap<HTMLDivElement, LayerEls>();
+
 export class DomStage {
-  private statics = new Map<string, StaticWrap>();
+  private statics = new Map<string, StaticEls>();
   private width = 0;
 
   constructor(
@@ -79,10 +90,10 @@ export class DomStage {
       const box = clipBox(clip, assets, W, H, tr);
       if (!box) return;
       const alpha = Math.min(1, tr.opacity) * mix.alpha;
-      let wrap: HTMLDivElement | null = null;
+      let els: LayerEls | null = null;
 
       if (clip.type === 'text') {
-        wrap = this.textWrap(clip, box).wrap;
+        els = this.textEls(clip, box);
       } else {
         const a = assets[clip.assetId];
         const c = tr.crop;
@@ -90,15 +101,16 @@ export class DomStage {
         const fh = box.h / Math.max(0.01, 1 - c.top - c.bottom);
         let inner: HTMLElement | null = null;
         if (a.kind === 'image') {
-          const sw = this.imageWrap(clip, a);
-          wrap = sw.wrap;
-          inner = sw.img!;
+          const se = this.imageEls(clip, a);
+          els = se;
+          inner = se.img!;
         } else {
           const slot = this.pool.slotFor(clip.id);
           const el = slot?.el as HTMLVideoElement | undefined;
           // Show the element only once it has a frame (avoids flashing black).
-          if (!slot?.wrap || !el || el.readyState < 2) return;
-          wrap = slot.wrap;
+          if (!slot?.wrap || !slot.outer || !el || el.readyState < 2) return;
+          els = slotEls.get(slot.outer) ?? { outer: slot.outer, wrap: slot.wrap };
+          slotEls.set(slot.outer, els);
           inner = el;
         }
         setStyle(inner, 'width', `${fw}px`);
@@ -107,73 +119,93 @@ export class DomStage {
         setStyle(inner, 'top', `${-c.top * fh}px`);
       }
 
+      const { outer, wrap } = els;
+      setStyle(outer, 'zIndex', `${i + 1}`);
+      setStyle(outer, 'clipPath', clipPath(mix, this.width, (this.width * H) / W));
+      setStyle(outer, 'visibility', alpha > 0.001 ? 'visible' : 'hidden');
       setStyle(wrap, 'width', `${box.w}px`);
       setStyle(wrap, 'height', `${box.h}px`);
       setStyle(wrap, 'transform', layerMatrix(k, W, H, mix, box));
       setStyle(wrap, 'opacity', `${Math.max(0, Math.min(1, alpha))}`);
-      setStyle(wrap, 'filter', cssFilter(clip.effects));
-      setStyle(wrap, 'zIndex', `${i + 1}`);
-      setStyle(wrap, 'visibility', alpha > 0.001 ? 'visible' : 'hidden');
-      shown.add(wrap);
+      setStyle(wrap, 'filter', filterString(clip.effects, mix, 1));
+      this.vignette(els, clip.effects.vignette ?? 0);
+      shown.add(outer);
     });
 
-    for (const s of this.pool.videoSlots) if (s.wrap && !shown.has(s.wrap)) setStyle(s.wrap, 'visibility', 'hidden');
-    for (const [id, sw] of this.statics) {
-      if (shown.has(sw.wrap)) continue;
+    for (const s of this.pool.videoSlots) if (s.outer && !shown.has(s.outer)) setStyle(s.outer, 'visibility', 'hidden');
+    for (const [id, se] of this.statics) {
+      if (shown.has(se.outer)) continue;
       if (!project.clips[id]) {
-        sw.wrap.remove();
+        se.outer.remove();
         this.statics.delete(id);
-      } else setStyle(sw.wrap, 'visibility', 'hidden');
+      } else setStyle(se.outer, 'visibility', 'hidden');
     }
   }
 
-  private makeWrap(): HTMLDivElement {
-    const wrap = document.createElement('div');
-    Object.assign(wrap.style, { position: 'absolute', left: '0', top: '0', overflow: 'hidden', transformOrigin: '0 0' });
-    this.root.appendChild(wrap);
-    return wrap;
+  private vignette(els: LayerEls, amount: number): void {
+    if (amount <= 0) {
+      if (els.vig) setStyle(els.vig, 'display', 'none');
+      return;
+    }
+    if (!els.vig) {
+      els.vig = document.createElement('div');
+      Object.assign(els.vig.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '2' });
+      els.wrap.appendChild(els.vig);
+    }
+    setStyle(els.vig, 'display', 'block');
+    setStyle(els.vig, 'background', vignetteGradient(amount));
   }
 
-  private imageWrap(clip: Clip, a: MediaAsset): StaticWrap {
-    let sw = this.statics.get(clip.id);
-    if (!sw || sw.kind !== 'image' || sw.key !== a.url) {
-      sw?.wrap.remove();
-      const wrap = this.makeWrap();
+  private makeEls(): LayerEls {
+    const outer = document.createElement('div');
+    Object.assign(outer.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, { position: 'absolute', left: '0', top: '0', overflow: 'hidden', transformOrigin: '0 0' });
+    outer.appendChild(wrap);
+    this.root.appendChild(outer);
+    return { outer, wrap };
+  }
+
+  private imageEls(clip: Clip, a: MediaAsset): StaticEls {
+    let se = this.statics.get(clip.id);
+    if (!se || se.kind !== 'image' || se.key !== a.url) {
+      se?.outer.remove();
+      const els = this.makeEls();
       const img = document.createElement('img');
       img.decoding = 'async';
       img.draggable = false;
       img.src = a.url;
       Object.assign(img.style, { position: 'absolute', maxWidth: 'none', display: 'block' });
-      wrap.appendChild(img);
-      sw = { wrap, kind: 'image', key: a.url, img };
-      this.statics.set(clip.id, sw);
+      els.wrap.appendChild(img);
+      se = { ...els, kind: 'image', key: a.url, img };
+      this.statics.set(clip.id, se);
     }
-    return sw;
+    return se;
   }
 
-  private textWrap(clip: TextClip, box: ClipBox): StaticWrap {
-    const key = JSON.stringify([clip.text, clip.style, Math.round(box.w), Math.round(box.h)]);
-    let sw = this.statics.get(clip.id);
-    if (!sw || sw.kind !== 'text') {
-      sw?.wrap.remove();
-      const wrap = this.makeWrap();
+  private textEls(clip: TextClip, box: ClipBox): StaticEls {
+    const key = JSON.stringify([clip.text, clip.style, Math.round(box.w), Math.round(box.h), useFontStore.getState().epoch]);
+    let se = this.statics.get(clip.id);
+    if (!se || se.kind !== 'text') {
+      se?.outer.remove();
+      const els = this.makeEls();
       const canvas = document.createElement('canvas');
       Object.assign(canvas.style, { width: '100%', height: '100%', display: 'block' });
-      wrap.appendChild(canvas);
-      sw = { wrap, kind: 'text', key: '', canvas };
-      this.statics.set(clip.id, sw);
+      els.wrap.appendChild(canvas);
+      se = { ...els, kind: 'text', key: '', canvas };
+      this.statics.set(clip.id, se);
     }
-    if (sw.key !== key) {
-      sw.key = key;
-      drawTextCanvas(sw.canvas!, clip, box.w, box.h);
+    if (se.key !== key) {
+      se.key = key;
+      drawTextCanvas(se.canvas!, clip, box.w, box.h);
     }
-    return sw;
+    return se;
   }
 
   dispose(): void {
-    for (const sw of this.statics.values()) sw.wrap.remove();
+    for (const se of this.statics.values()) se.outer.remove();
     this.statics.clear();
-    for (const s of this.pool.videoSlots) if (s.wrap) s.wrap.style.visibility = 'hidden';
+    for (const s of this.pool.videoSlots) if (s.outer) s.outer.style.visibility = 'hidden';
   }
 }
 
@@ -196,6 +228,9 @@ function drawTextCanvas(canvas: HTMLCanvasElement, c: TextClip, w: number, h: nu
     ctx.fill();
   }
   ctx.font = textFont(c);
+  ctx.direction = isRtl(c.text) ? 'rtl' : 'ltr';
+  // Absolute alignment: with RTL text the default 'start' would mean the right edge.
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = s.color;
   if (s.shadow) {

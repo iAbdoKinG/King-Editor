@@ -13,12 +13,14 @@ import {
   rippleDelete,
   splitClip,
   updateClip,
+  addMarker,
 } from '../../engine/timeline/ops';
 import { defaultTransition, maxTransitionDuration, prevAdjacent } from '../../engine/timeline/transitions';
 import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
 import { quantize } from '../../utils/time';
+import { uid } from '../../utils/id';
 
 const ps = () => useProjectStore.getState();
 const toast = (t: string, tone?: 'info' | 'error') => useUIStore.getState().toast(t, tone);
@@ -167,4 +169,53 @@ export function addTransition(clipId: string): void {
 export function removeTransition(clipId: string): void {
   ps().apply((p) => updateClip(p, clipId, (c) => ({ ...c, transitionIn: undefined })));
   ps().selectTransition(null);
+}
+
+/* ----------------------------- markers ----------------------------- */
+
+export function addMarkerAtPlayhead(): string {
+  let id = '';
+  ps().apply((p) => {
+    const [n, mid] = addMarker(p, playhead());
+    id = mid;
+    return n;
+  });
+  return id;
+}
+
+/** Jump to the previous (-1) or next (+1) marker. */
+export function jumpMarker(dir: -1 | 1): void {
+  const markers = ps().project.markers ?? [];
+  const t = playhead();
+  const target = dir > 0 ? markers.find((m) => m.t > t + 1e-3) : [...markers].reverse().find((m) => m.t < t - 1e-3);
+  if (target) {
+    engine.clock.pause();
+    engine.seek(target.t);
+  } else toast(markers.length ? 'No more markers in that direction.' : 'No markers yet — press M or tap the flag button.');
+}
+
+/** Copy a video clip's sound to its own clip on an audio track and mute the original. */
+export function extractAudio(clipId?: string): void {
+  const { project, selectedClipId } = ps();
+  const id = clipId ?? selectedClipId;
+  const clip = id ? project.clips[id] : null;
+  const asset = clip?.type === 'media' ? useMediaStore.getState().assets[clip.assetId] : null;
+  if (!clip || clip.type !== 'media' || asset?.kind !== 'video') {
+    toast('Select a video clip to extract its audio.');
+    return;
+  }
+  const track = project.tracks.find((t) => t.id === clip.trackId);
+  if (track?.kind === 'audio') return;
+  let newId = '';
+  ps().apply((p) => {
+    const [p1, tid] = ensureTrackWithRoom(p, 'audio', clip.start, clip.duration);
+    const audioClip = { ...structuredClone(clip), id: uid('clp'), trackId: tid, keyframes: undefined, transitionIn: undefined };
+    newId = audioClip.id;
+    return insertClip(
+      updateClip(p1, clip.id, (c) => (c.type === 'media' ? { ...c, audio: { ...c.audio, volume: 0 } } : c)),
+      audioClip,
+    );
+  });
+  ps().select(newId);
+  toast('Audio extracted to an audio track. The video clip was muted.');
 }

@@ -64,7 +64,7 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
           <Icon name="stepBack" size={18} />
         </button>
         <button
-          className="icon-btn mx-1 !h-11 !w-11 rounded-full bg-text !text-bg hover:!bg-white"
+          className="icon-btn mx-1 !h-11 !w-11 rounded-full bg-text !text-bg hover:opacity-90"
           aria-label={playing ? 'Pause' : 'Play'}
           data-testid="play-toggle"
           onClick={togglePlay}

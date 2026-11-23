@@ -2,7 +2,7 @@ import { Icon, type IconName } from '../../components/Icon';
 import { addTrack } from '../../engine/timeline/ops';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
-import { addText, deleteSelected, duplicateSelected, splitAtPlayhead } from './actions';
+import { addMarkerAtPlayhead, addText, deleteSelected, duplicateSelected, splitAtPlayhead } from './actions';
 
 function Btn({ icon, label, onClick, disabled, pressed, text }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; pressed?: boolean; text?: string }) {
   return (
@@ -31,6 +31,7 @@ export function EditToolbar() {
       <Btn icon="ripple" label="Ripple delete (⇧⌫)" onClick={() => deleteSelected(true)} disabled={!hasSel} />
       <div className="mx-1.5 h-5 w-px bg-line" />
       <Btn icon="text" label="Add text (T)" text="Text" onClick={addText} />
+      <Btn icon="flag" label="Add marker (M)" onClick={addMarkerAtPlayhead} />
       <Btn icon="film" label="Add video track" text="+Track" onClick={() => apply((p) => addTrack(p, 'video')[0])} />
       <Btn icon="music" label="Add audio track" onClick={() => apply((p) => addTrack(p, 'audio')[0])} />
       <div className="flex-1" />
@@ -50,6 +51,7 @@ export function CompactTimelineBar() {
     <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-line bg-surface px-1" role="toolbar" aria-label="Timeline tools">
       <Btn icon="film" label="Add video track" text="+V" onClick={() => apply((p) => addTrack(p, 'video')[0])} />
       <Btn icon="music" label="Add audio track" text="+A" onClick={() => apply((p) => addTrack(p, 'audio')[0])} />
+      <Btn icon="flag" label="Add marker" onClick={addMarkerAtPlayhead} />
       <div className="flex-1" />
       <Btn icon="magnet" label="Snapping" pressed={snapping} onClick={() => set({ snapping: !snapping })} />
       <Btn icon="zoomOut" label="Zoom out" onClick={() => zoom(1 / 1.5)} />

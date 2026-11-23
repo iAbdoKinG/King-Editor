@@ -272,9 +272,9 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       data-testid="preview-overlay"
     >
       <svg ref={svgRef} width={width} height={height} className="absolute inset-0 overflow-visible" style={{ visibility: 'hidden' }}>
-        <polygon ref={outlineRef} fill="none" stroke="#91C1C5" strokeWidth={1.5} />
-        <line ref={rotLineRef} stroke="#91C1C5" strokeWidth={1.5} />
-        <circle ref={rotRef} r={HANDLE_R - 3} fill="#15191D" stroke="#91C1C5" strokeWidth={2} pointerEvents="none" />
+        <polygon ref={outlineRef} fill="none" style={{ stroke: 'var(--color-accent)' }} strokeWidth={1.5} />
+        <line ref={rotLineRef} style={{ stroke: 'var(--color-accent)' }} strokeWidth={1.5} />
+        <circle ref={rotRef} r={HANDLE_R - 3} style={{ fill: 'var(--color-bg)', stroke: 'var(--color-accent)' }} strokeWidth={2} pointerEvents="none" />
         <circle ref={scaleRef} r={HANDLE_R - 3} fill="#F2F4F5" stroke="#15191D" strokeWidth={2} pointerEvents="none" />
         {/* Larger invisible hit areas for touch. */}
         <circle ref={rotHitRef} r={22} fill="transparent" data-handle="rotate" style={{ cursor: 'grab' }} />

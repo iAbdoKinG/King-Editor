@@ -18,7 +18,7 @@ export function ImportButton({ className = '', label = 'Import' }: { className?:
   return (
     <>
       <button
-        className={`flex h-10 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-[13px] font-semibold text-bg hover:bg-accent-strong ${className}`}
+        className={`flex h-10 items-center justify-center gap-2 rounded-lg bg-accent px-3 text-[13px] font-semibold text-on-accent hover:bg-accent-strong ${className}`}
         onClick={() => input.current?.click()}
         data-testid="import-button"
       >

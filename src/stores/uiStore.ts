@@ -28,6 +28,8 @@ interface UIState {
   renderer: PreviewRenderer;
   showStats: boolean;
   exportOpen: boolean;
+  themeOpen: boolean;
+  presetsOpen: boolean;
   contextMenu: ContextMenuState | null;
   toasts: Toast[];
   set: (patch: Partial<Omit<UIState, 'set' | 'toast' | 'zoomBy'>>) => void;
@@ -51,6 +53,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   renderer: 'gpu',
   showStats: false,
   exportOpen: false,
+  themeOpen: false,
+  presetsOpen: false,
   contextMenu: null,
   toasts: [],
   set: (patch) => set(patch),

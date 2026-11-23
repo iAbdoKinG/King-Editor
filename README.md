@@ -12,6 +12,7 @@ npm run build && npx vite preview --port 4173 &
 node scripts/e2e.cjs <media-dir> <screenshot-dir>
 node scripts/e2e-m456.cjs <media-dir> <out-dir>   # keyframes, transitions, export (+ ffprobe)
 node scripts/measure-playback.cjs <media-dir> 6   # playback smoothness under 6× CPU slowdown
+node scripts/e2e-phase-a.cjs <media-dir> <out-dir>   # waveforms, markers, themes, presets, fonts, transitions, audio, advisor
 ```
 
 ## Architecture
@@ -68,6 +69,20 @@ Keyboard: Space/K play · ←/→ frame · ⇧←/→ 1 s · S or ⌘B split · 
 | 5 Effects & transitions: brightness/contrast/saturation/blur; **Cross Dissolve, Fade, Slide (4 directions), Zoom** centred on cuts, with duration/easing and audio crossfade | done |
 | 6 Export: offline, frame-accurate WebCodecs render → MP4 (H.264/HEVC + AAC/Opus) or WebM fallback, 720p/1080p, 24–60 fps, progress, cancel, file verified by re-parsing before success, Download / Share | done (needs real iPad validation) |
 | 7 Optimisation | basic instrumentation (perf stats toggle in Project inspector); device profiling pending |
+
+## Phase A additions
+
+- **Waveforms** under every clip with sound (video strip + audio clips). They are computed in a background stream, so the decoded audio is never kept in memory. Silent stretches are shaded so pauses are easy to find.
+- **Markers**: add with `M` (`⇧M` add and name), jump with `[` / `]`, tap a flag to rename, recolour or delete. Clips snap to markers.
+- **Themes**: 7 presets (incl. Light) plus a fully editable custom theme; saved on the device.
+- **Presets library**: save effects, text styles, transitions, animations and themes. Apply in one tap. Share as a link (data lives in the URL fragment, never sent to a server) or as a `.kingpreset` file. Imports are strictly validated and clamped (plain values only).
+- **Fonts**: 16 Arabic fonts (Cairo, Tajawal, Almarai, IBM Plex Arabic, Amiri, Aref Ruqaa, El Messiri, Reem Kufi, …) and 9 display fonts. They are bundled but download only on first use. RTL text is handled in both the preview and export.
+- **Transitions**: Wipe, Iris, Cover, Flash, Blur Dissolve and Spin, in addition to Push, Dissolve, Fade and Zoom. Each is verified to look the same in preview and export.
+- **Effects**: hue, warmth, grayscale, vignette, and 10 one-tap **Looks** previewed on the clip's own thumbnail.
+- **Transform tools**: flip H/V, Fit/Fill/Stretch, a rotation-aware 3×3 align grid, and 12 quick animations (fade/pop/slide/spin in-out, slow zoom, pan) that remain editable keyframes.
+- **Audio arrangement**: extract audio to its own track; per-track volume, mute and solo, applied identically in playback and export.
+- **Resource advisor**: warns once about workloads that are heavy for a browser (4K, very long media, many stacked videos, heavy blur, very long exports).
+- **Touch**: wider trim handles on touch screens; double-tap a clip to open its properties.
 
 ## Known limitations
 

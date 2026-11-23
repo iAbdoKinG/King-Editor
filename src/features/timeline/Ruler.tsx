@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { RULER_H } from './constants';
+import { useThemeStore } from '../../app/theme';
 
 const STEPS = [1 / 30, 1 / 10, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200];
 
@@ -34,6 +35,9 @@ export function Ruler({ scroller, pps }: { scroller: HTMLDivElement | null; pps:
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, RULER_H);
       const left = scroller.scrollLeft;
+      const css = getComputedStyle(document.documentElement);
+      const cMajor = css.getPropertyValue('--color-muted').trim() || '#5b6870';
+      const cMinor = css.getPropertyValue('--color-line').trim() || '#39434a';
       const major = STEPS.find((s) => s * pps >= 84) ?? STEPS[STEPS.length - 1];
       const minor = major / (major >= 1 && major % 5 === 0 ? 5 : 2);
       const t0 = Math.floor(left / pps / minor) * minor;
@@ -43,13 +47,13 @@ export function Ruler({ scroller, pps }: { scroller: HTMLDivElement | null; pps:
       for (let t = t0; t <= t1 + minor; t += minor) {
         const x = Math.round(t * pps - left) + 0.5;
         const isMajor = Math.abs(t / major - Math.round(t / major)) < 1e-6;
-        ctx.strokeStyle = isMajor ? '#5b6870' : '#39434a';
+        ctx.strokeStyle = isMajor ? cMajor : cMinor;
         ctx.beginPath();
         ctx.moveTo(x, isMajor ? RULER_H - 12 : RULER_H - 6);
         ctx.lineTo(x, RULER_H);
         ctx.stroke();
         if (isMajor && t >= 0) {
-          ctx.fillStyle = '#9caab1';
+          ctx.fillStyle = cMajor;
           ctx.fillText(label(Math.max(0, t), major), x + 4, 5);
         }
       }
@@ -59,10 +63,12 @@ export function Ruler({ scroller, pps }: { scroller: HTMLDivElement | null; pps:
     };
     schedule();
     scroller.addEventListener('scroll', schedule, { passive: true });
+    const offTheme = useThemeStore.subscribe(() => requestAnimationFrame(schedule));
     const ro = new ResizeObserver(schedule);
     ro.observe(scroller);
     return () => {
       scroller.removeEventListener('scroll', schedule);
+      offTheme();
       ro.disconnect();
       cancelAnimationFrame(raf);
     };

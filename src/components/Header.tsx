@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Icon } from './Icon';
+import { Menu } from './Menu';
 import { Wordmark, LogoMark } from './Logo';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
@@ -12,6 +14,7 @@ export function Header({ compact }: { compact: boolean }) {
   const apply = useProjectStore((s) => s.apply);
   const focusMode = useUIStore((s) => s.focusMode);
   const set = useUIStore((s) => s.set);
+  const [more, setMore] = useState<{ x: number; y: number } | null>(null);
   const libraryOpen = useUIStore((s) => s.libraryOpen);
   const inspectorOpen = useUIStore((s) => s.inspectorOpen);
 
@@ -57,6 +60,31 @@ export function Header({ compact }: { compact: boolean }) {
           >
             <Icon name="focus" size={18} />
           </button>
+        )}
+        {compact ? (
+          <button className="icon-btn" aria-label="More" onClick={(e) => setMore({ x: e.clientX, y: e.clientY })}>
+            <Icon name="more" size={18} />
+          </button>
+        ) : (
+          <>
+            <button className="icon-btn" aria-label="Theme" title="Theme" onClick={() => set({ themeOpen: true })}>
+              <Icon name="palette" size={18} />
+            </button>
+            <button className="icon-btn" aria-label="Presets library" title="Presets" onClick={() => set({ presetsOpen: true })}>
+              <Icon name="bookmark" size={18} />
+            </button>
+          </>
+        )}
+        {more && (
+          <Menu
+            x={more.x}
+            y={more.y}
+            onClose={() => setMore(null)}
+            items={[
+              { label: 'Presets library', onSelect: () => set({ presetsOpen: true }) },
+              { label: 'Theme', onSelect: () => set({ themeOpen: true }) },
+            ]}
+          />
         )}
         <button
           className="ml-1 flex h-9 items-center gap-1.5 rounded-lg border border-accent/60 px-3 text-[13px] font-semibold text-accent hover:bg-accent/10"

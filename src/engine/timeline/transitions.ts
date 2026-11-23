@@ -13,26 +13,42 @@ import { clipEnd, clipsOnTrack } from './model';
 
 const EPS = 1e-4;
 
-export const TRANSITION_TYPES: Array<{ value: TransitionType; label: string }> = [
+export const TRANSITION_TYPES: Array<{ value: TransitionType; label: string; directional?: boolean }> = [
   { value: 'dissolve', label: 'Cross Dissolve' },
   { value: 'fade', label: 'Fade through color' },
-  { value: 'slide', label: 'Slide' },
+  { value: 'flash', label: 'Flash' },
+  { value: 'blur', label: 'Blur Dissolve' },
+  { value: 'slide', label: 'Push', directional: true },
+  { value: 'cover', label: 'Cover', directional: true },
+  { value: 'wipe', label: 'Wipe', directional: true },
+  { value: 'iris', label: 'Iris' },
   { value: 'zoom', label: 'Zoom' },
+  { value: 'spin', label: 'Spin' },
 ];
 
 export function defaultTransition(): Transition {
   return { type: 'dissolve', duration: 0.5, direction: 'left', easing: 'easeInOut' };
 }
 
+/** Clip region in frame space: inset fractions, or a centred circle (radius as fraction of the half-diagonal). */
+export type MixClip = { kind: 'inset'; top: number; right: number; bottom: number; left: number } | { kind: 'circle'; r: number };
+
 export interface Mix {
   alpha: number;
   dx: number;
   dy: number;
   scale: number;
+  /** Rotation in degrees around the frame centre. */
+  rotate: number;
+  /** Extra blur in project pixels. */
+  blur: number;
+  /** Brightness multiplier (1 = unchanged). */
+  brightness: number;
+  clip: MixClip | null;
   audio: number;
 }
 
-export const IDENTITY_MIX: Mix = { alpha: 1, dx: 0, dy: 0, scale: 1, audio: 1 };
+export const IDENTITY_MIX: Mix = { alpha: 1, dx: 0, dy: 0, scale: 1, rotate: 0, blur: 0, brightness: 1, clip: null, audio: 1 };
 
 export function prevAdjacent(project: Project, clip: Clip): Clip | null {
   for (const c of clipsOnTrack(project, clip.trackId, clip.id)) if (Math.abs(clipEnd(c) - clip.start) < EPS) return c;
@@ -97,6 +113,44 @@ export function transitionMix(tr: Transition, rawP: number, W: number, H: number
         in: { ...IDENTITY_MIX, dx: -vx * (1 - p) * W, dy: -vy * (1 - p) * H, audio: p },
       };
     }
+    case 'cover': {
+      const [vx, vy] = dirVec(tr.direction);
+      return {
+        out: { ...IDENTITY_MIX, audio: 1 - p },
+        in: { ...IDENTITY_MIX, dx: -vx * (1 - p) * W, dy: -vy * (1 - p) * H, audio: p },
+      };
+    }
+    case 'wipe': {
+      const q = 1 - p;
+      const c = tr.direction;
+      return {
+        out: { ...IDENTITY_MIX, audio: 1 - p },
+        in: {
+          ...IDENTITY_MIX,
+          audio: p,
+          clip: { kind: 'inset', left: c === 'left' ? q : 0, right: c === 'right' ? q : 0, top: c === 'up' ? q : 0, bottom: c === 'down' ? q : 0 },
+        },
+      };
+    }
+    case 'iris':
+      return { out: { ...IDENTITY_MIX, audio: 1 - p }, in: { ...IDENTITY_MIX, audio: p, clip: { kind: 'circle', r: p } } };
+    case 'flash': {
+      const first = p < 0.5;
+      return {
+        out: { ...IDENTITY_MIX, alpha: first ? 1 : 0, brightness: first ? 1 + 5 * (2 * p) : 1, audio: 1 - p },
+        in: { ...IDENTITY_MIX, alpha: first ? 0 : 1, brightness: first ? 1 : 1 + 5 * (2 - 2 * p), audio: p },
+      };
+    }
+    case 'blur':
+      return {
+        out: { ...IDENTITY_MIX, blur: 28 * p, audio: 1 - p },
+        in: { ...IDENTITY_MIX, alpha: p, blur: 28 * (1 - p), audio: p },
+      };
+    case 'spin':
+      return {
+        out: { ...IDENTITY_MIX, rotate: 180 * p, scale: 1 - 0.6 * p, alpha: 1 - p, audio: 1 - p },
+        in: { ...IDENTITY_MIX, rotate: -180 * (1 - p), scale: 0.4 + 0.6 * p, alpha: p, audio: p },
+      };
     case 'zoom':
       return {
         out: { ...IDENTITY_MIX, scale: 1 + 0.3 * p, alpha: 1, audio: 1 - p },

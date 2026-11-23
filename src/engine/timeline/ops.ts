@@ -3,7 +3,7 @@
  * Project and never mutates its input, which keeps undo/redo trivial and the
  * operations easy to unit test.
  */
-import type { Clip, MediaAsset, Project, Track, TrackKind } from '../../types/project';
+import type { Clip, Marker, MediaAsset, Project, Track, TrackKind } from '../../types/project';
 import { uid } from '../../utils/id';
 import { clamp, quantize } from '../../utils/time';
 import { clipEnd, clipsOnTrack, createTrack, maxClipDuration } from './model';
@@ -221,7 +221,7 @@ export function snapTime(t: number, candidates: number[], threshold: number): { 
 }
 
 export function snapCandidates(project: Project, excludeId: string | null, playhead: number): number[] {
-  const out = [0, playhead];
+  const out = [0, playhead, ...(project.markers ?? []).map((m) => m.t)];
   for (const id in project.clips) {
     if (id === excludeId) continue;
     const c = project.clips[id];
@@ -264,4 +264,27 @@ export function setClipSpeed(
     if (n.start >= clipEnd(clip) - EPS) duration = Math.min(duration, n.start - clip.start);
   }
   return withClip(project, { ...next, duration: Math.max(minClipDuration(fps), quantize(duration, fps)) });
+}
+
+/* ----------------------------- markers ----------------------------- */
+
+export const MARKER_COLORS = ['#91C1C5', '#E3B261', '#E0817A', '#9FC27D', '#B39DDB', '#F2F4F5'];
+
+export function addMarker(project: Project, t: number, label = '', color = MARKER_COLORS[0]): [Project, string] {
+  const fps = project.settings.fps;
+  const at = quantize(Math.max(0, t), fps);
+  const existing = (project.markers ?? []).find((m) => Math.abs(m.t - at) < EPS);
+  if (existing) return [project, existing.id];
+  const m: Marker = { id: uid('mrk'), t: at, label, color };
+  const markers = [...(project.markers ?? []), m].sort((a, b) => a.t - b.t);
+  return [{ ...project, markers }, m.id];
+}
+
+export function updateMarker(project: Project, id: string, patch: Partial<Marker>): Project {
+  const markers = (project.markers ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)).sort((a, b) => a.t - b.t);
+  return { ...project, markers };
+}
+
+export function removeMarker(project: Project, id: string): Project {
+  return { ...project, markers: (project.markers ?? []).filter((m) => m.id !== id) };
 }

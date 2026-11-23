@@ -3,6 +3,7 @@
  * that what is drawn, what is selectable and what is exported always agree.
  */
 import type { Clip, MediaAsset, TextClip, Transform } from '../../types/project';
+import { isRtl } from '../../utils/text';
 
 export interface ClipBox {
   /** Anchor position in project pixels (from the frame's top-left). */
@@ -42,6 +43,7 @@ export function textBoxSize(c: TextClip): { w: number; h: number; lines: string[
   let lineWidths: number[];
   if (m) {
     m.font = textFont(c);
+    m.direction = isRtl(c.text) ? 'rtl' : 'ltr';
     lineWidths = lines.map((l) => m.measureText(l).width);
   } else lineWidths = lines.map((l) => l.length * c.style.fontSize * 0.55);
   const pad = c.style.fontSize * TEXT_PAD;
@@ -84,8 +86,8 @@ export function clipBox(
     h,
     ax: tr.anchorX,
     ay: tr.anchorY,
-    sx: tr.scaleX,
-    sy: tr.scaleY,
+    sx: tr.scaleX * (tr.flipH ? -1 : 1),
+    sy: tr.scaleY * (tr.flipV ? -1 : 1),
     rot: (tr.rotation * Math.PI) / 180,
   };
 }

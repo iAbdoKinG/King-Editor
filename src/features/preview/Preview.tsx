@@ -49,7 +49,7 @@ export function Preview({ theater = false }: { theater?: boolean }) {
       c.height = bh;
     }
     engine.invalidate();
-  }, [box.w, box.h, W, H, quality]);
+  }, [box.w, box.h, W, H, quality, renderer]);
 
   useEffect(() => {
     if (renderer === 'gpu') {
@@ -66,7 +66,7 @@ export function Preview({ theater = false }: { theater?: boolean }) {
   }, [box.w, renderer]);
 
   return (
-    <div ref={hostRef} className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-[#0f1215]">
+    <div ref={hostRef} className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-stage">
       <div className="relative shadow-[0_0_0_1px_rgba(57,67,74,0.8)]" style={{ width: box.w, height: box.h }}>
         {renderer === 'gpu' ? (
           <div ref={stageRef} className="absolute inset-0 overflow-hidden" aria-label="Preview" data-testid="preview-stage" />

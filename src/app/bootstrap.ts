@@ -4,6 +4,9 @@
  */
 import { engine } from '../engine/playback/engine';
 import { imageCache } from '../engine/rendering/imageCache';
+import { releaseWaveform } from '../features/media/waveform';
+import { ensureFont, useFontStore } from '../features/fonts/fonts';
+import { checkAsset, checkProject } from '../features/advisor/advisor';
 import { onAssetReleased, useMediaStore } from '../stores/mediaStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
@@ -21,9 +24,32 @@ export function bootstrap(): void {
   });
   useMediaStore.subscribe(() => engine.invalidate());
 
+  // Fonts are downloaded on first use; redraw when one arrives.
+  const loadFonts = () => {
+    for (const c of Object.values(useProjectStore.getState().project.clips)) if (c.type === 'text') void ensureFont(c.style.fontFamily);
+  };
+  useProjectStore.subscribe((s, prev) => {
+    if (s.project.clips !== prev.project.clips) loadFonts();
+  });
+  useFontStore.subscribe(() => engine.invalidate());
+
+  // Resource advisor (debounced; never on the hot path).
+  let advTimer = 0;
+  const advise = () => {
+    clearTimeout(advTimer);
+    advTimer = window.setTimeout(() => checkProject(useProjectStore.getState().project, useMediaStore.getState().assets), 800);
+  };
+  useProjectStore.subscribe((s, prev) => {
+    if (s.project.clips !== prev.project.clips) advise();
+  });
+  useMediaStore.subscribe((s, prev) => {
+    for (const id in s.assets) if (s.assets[id].status === 'ready' && prev.assets[id]?.status !== 'ready') checkAsset(s.assets[id]);
+  });
+
   onAssetReleased((a) => {
     engine.mediaPool?.releaseAsset(a.url);
     imageCache.release(a.id);
+    releaseWaveform(a.id);
   });
 
   engine.mediaPool!.onBlocked = () =>

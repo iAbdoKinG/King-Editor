@@ -19,7 +19,17 @@ import {
 } from '../../engine/timeline/animation';
 import { TRANSITION_TYPES, maxTransitionDuration, prevAdjacent } from '../../engine/timeline/transitions';
 import { usePlayheadTime } from '../../hooks/usePlayheadTime';
-import { addTransition, removeTransition } from '../timeline/actions';
+import { LOOKS, lookEffects } from './looks';
+import { savePreset } from '../presets/PresetsDialog';
+import { filterString } from '../../engine/rendering/filters';
+import { ANIM_PRESETS, applyAnimPreset } from '../../engine/timeline/animationPresets';
+import { boxCorners, clipBox } from '../../engine/rendering/geometry';
+import { FONTS, ensureFont } from '../fonts/fonts';
+import { addTransition, extractAudio, removeTransition } from '../timeline/actions';
+
+function isOnAudioTrack(clip: Clip): boolean {
+  return useProjectStore.getState().project.tracks.find((t) => t.id === clip.trackId)?.kind === 'audio';
+}
 import { Icon } from '../../components/Icon';
 import { canvasFilterSupported } from '../../engine/rendering/compositor';
 import { defaultAudio, defaultEffects, defaultTransform, frameSize } from '../../engine/timeline/model';
@@ -36,6 +46,14 @@ const fromPct = (s: string) => parseFloat(s) / 100;
 function usePatch(clipId: string) {
   return (fn: (c: Clip) => Clip, commit = true) =>
     useProjectStore.getState().apply((p) => updateClip(p, clipId, fn), { commit });
+}
+
+function SaveButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button className="mr-1 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted hover:bg-elevated hover:text-text" onClick={onClick} aria-label={label} title={label}>
+      <Icon name="bookmark" size={12} /> Save
+    </button>
+  );
 }
 
 function ResetButton({ onClick, label }: { onClick: () => void; label: string }) {
@@ -81,6 +99,7 @@ function TransformSection({ clip }: { clip: Clip }) {
         />
       }
     >
+      <TransformTools clip={clip} lt={lt} />
       <SliderField label="Position X" value={tr.x} min={-W} max={W} step={1} keyframe={kf('x')} onChange={(v, c) => anim('x', v, c)} />
       <SliderField label="Position Y" value={tr.y} min={-H} max={H} step={1} keyframe={kf('y')} onChange={(v, c) => anim('y', v, c)} />
       {uniform ? (
@@ -122,12 +141,106 @@ function TransformSection({ clip }: { clip: Clip }) {
   );
 }
 
+/** Flip, fit/fill/stretch and a 3×3 alignment grid (rotation-aware). */
+function TransformTools({ clip, lt }: { clip: Clip; lt: number }) {
+  const patch = usePatch(clip.id);
+  const assets = useMediaStore((s) => s.assets);
+  const settings = useProjectStore((s) => s.project.settings);
+  const { width: W, height: H } = frameSize(settings);
+  const tr = resolveTransform(clip, lt);
+  const base = clipBox(clip, assets, W, H, { ...tr, scaleX: 1, scaleY: 1, rotation: 0, x: 0, y: 0, flipH: false, flipV: false });
+  const align = (hx: -1 | 0 | 1, vy: -1 | 0 | 1) => {
+    const box = clipBox(clip, assets, W, H, tr);
+    if (!box) return;
+    const pts = boxCorners(box);
+    const minX = Math.min(...pts.map((p) => p.x));
+    const maxX = Math.max(...pts.map((p) => p.x));
+    const minY = Math.min(...pts.map((p) => p.y));
+    const maxY = Math.max(...pts.map((p) => p.y));
+    const dx = hx < 0 ? -minX : hx > 0 ? W - maxX : W / 2 - (minX + maxX) / 2;
+    const dy = vy < 0 ? -minY : vy > 0 ? H - maxY : H / 2 - (minY + maxY) / 2;
+    patch((c) => setAnimatedValue(setAnimatedValue(c, 'x', lt, Math.round(tr.x + dx)), 'y', lt, Math.round(tr.y + dy)));
+  };
+  const fit = (mode: 'fit' | 'fill' | 'stretch') => {
+    if (!base) return;
+    const fill = Math.max(W / base.w, H / base.h);
+    patch((c) => {
+      let n = setAnimatedValue(setAnimatedValue(c, 'x', lt, 0), 'y', lt, 0);
+      if (mode === 'stretch') n = { ...n, keyframes: n.keyframes ? { ...n.keyframes, scale: undefined } : undefined, transform: { ...n.transform, scaleX: W / base.w, scaleY: H / base.h } } as Clip;
+      else {
+        n = { ...n, transform: { ...n.transform, scaleY: n.transform.scaleX } } as Clip;
+        n = setAnimatedValue(n, 'scale', lt, mode === 'fit' ? 1 : fill);
+      }
+      return n;
+    });
+  };
+  const btn = 'field flex h-9 flex-1 items-center justify-center gap-1 text-[11.5px] hover:border-accent';
+  return (
+    <div className="mb-2 space-y-2">
+      <div className="flex gap-1.5">
+        <button className={btn} aria-pressed={!!clip.transform.flipH} onClick={() => patch((c) => ({ ...c, transform: { ...c.transform, flipH: !c.transform.flipH } }) as Clip)}>
+          <Icon name="flipH" size={15} /> Flip
+        </button>
+        <button className={btn} aria-pressed={!!clip.transform.flipV} onClick={() => patch((c) => ({ ...c, transform: { ...c.transform, flipV: !c.transform.flipV } }) as Clip)}>
+          <Icon name="flipV" size={15} /> Flip
+        </button>
+        <button className={btn} onClick={() => fit('fit')}>Fit</button>
+        <button className={btn} onClick={() => fit('fill')}>Fill</button>
+        <button className={btn} onClick={() => fit('stretch')}>Stretch</button>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="w-[64px] text-[12px] text-muted">Align</span>
+        <div className="grid grid-cols-3 gap-1" role="group" aria-label="Align in frame">
+          {([-1, 0, 1] as const).flatMap((vy) =>
+            ([-1, 0, 1] as const).map((hx) => (
+              <button
+                key={`${hx}${vy}`}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-line hover:border-accent"
+                aria-label={`Align ${vy < 0 ? 'top' : vy > 0 ? 'bottom' : 'middle'} ${hx < 0 ? 'left' : hx > 0 ? 'right' : 'center'}`}
+                onClick={() => align(hx, vy)}
+              >
+                <span className="block h-1.5 w-1.5 rounded-full bg-muted" style={{ transform: `translate(${hx * 7}px, ${vy * 7}px)` }} />
+              </button>
+            )),
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const EASINGS: Array<{ value: Easing; label: string }> = [
   { value: 'linear', label: 'Linear' },
   { value: 'easeIn', label: 'Ease In' },
   { value: 'easeOut', label: 'Ease Out' },
   { value: 'easeInOut', label: 'Ease In/Out' },
 ];
+
+function QuickAnimations({ clip }: { clip: Clip }) {
+  const patch = usePatch(clip.id);
+  const settings = useProjectStore((s) => s.project.settings);
+  const { width: W, height: H } = frameSize(settings);
+  return (
+    <div className="space-y-1.5 pb-2">
+      {(['in', 'out', 'whole'] as const).map((g) => (
+        <div key={g} className="flex items-center gap-2">
+          <span className="w-[54px] shrink-0 text-[11px] text-muted">{g === 'in' ? 'In' : g === 'out' ? 'Out' : 'Whole clip'}</span>
+          <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+            {ANIM_PRESETS.filter((p) => p.group === g).map((p) => (
+              <button
+                key={p.id}
+                className="h-8 shrink-0 rounded-full border border-line px-3 text-[11.5px] hover:border-accent hover:text-accent"
+                onClick={() => patch((c) => applyAnimPreset(c, p.id, W, H))}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function AnimationSection({ clip }: { clip: Clip }) {
   const patch = usePatch(clip.id);
@@ -136,6 +249,7 @@ function AnimationSection({ clip }: { clip: Clip }) {
   if (!times.length)
     return (
       <Section title="Animation">
+        <QuickAnimations clip={clip} />
         <p className="text-[11px] leading-snug text-muted">
           Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at
           another time to animate.
@@ -151,7 +265,11 @@ function AnimationSection({ clip }: { clip: Clip }) {
       : null;
   const seekLocal = (t: number) => engine.seek(clip.start + Math.min(Math.max(0, t), clip.duration - 1e-3));
   return (
-    <Section title={`Animation · ${times.length} keyframe${times.length === 1 ? '' : 's'}`}>
+    <Section
+      title={`Animation · ${times.length} keyframe${times.length === 1 ? '' : 's'}`}
+      action={<SaveButton label="Save animation as preset" onClick={() => savePreset('animation', clip.keyframes ?? {}, 'My animation')} />}
+    >
+      <QuickAnimations clip={clip} />
       <div className="flex gap-2">
         <button className="field flex-1 text-[12px] disabled:opacity-40" disabled={prev === undefined} onClick={() => seekLocal(prev!)}>
           ◂ Previous
@@ -214,7 +332,7 @@ function TransitionInspector({ clipId }: { clipId: string }) {
         <div className="text-[13px] font-medium">{TRANSITION_TYPES.find((x) => x.value === tr.type)?.label}</div>
         {!prev && <div className="text-[11px] text-danger">Inactive: the clips no longer touch.</div>}
       </div>
-      <Section title="Settings">
+      <Section title="Settings" action={<SaveButton label="Save transition as preset" onClick={() => savePreset('transition', tr, TRANSITION_TYPES.find((x) => x.value === tr.type)?.label ?? 'Transition')} />}>
         <Row label="Type">
           <select className="field w-full" aria-label="Transition type" value={tr.type} onChange={(e) => set({ type: e.target.value as TransitionType })}>
             {TRANSITION_TYPES.map((x) => (
@@ -232,7 +350,7 @@ function TransitionInspector({ clipId }: { clipId: string }) {
           step={0.05}
           onChange={(v, c) => set({ duration: v }, c)}
         />
-        {tr.type === 'slide' && (
+        {TRANSITION_TYPES.find((x) => x.value === tr.type)?.directional && (
           <Row label="Direction">
             <Segmented<Direction>
               label="Direction"
@@ -291,21 +409,60 @@ function CropSection({ clip }: { clip: MediaClip }) {
   );
 }
 
-function EffectsSection({ clip }: { clip: Clip }) {
+function EffectsSection({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
   const patch = usePatch(clip.id);
-  const e = clip.effects;
-  const set = (p: Partial<Clip['effects']>, commit: boolean) => patch((c) => ({ ...c, effects: { ...c.effects, ...p } }) as Clip, commit);
+  const e = { ...defaultEffects(), ...clip.effects };
+  const set = (p: Partial<Clip['effects']>, commit: boolean) => patch((c) => ({ ...c, effects: { ...defaultEffects(), ...c.effects, ...p } }) as Clip, commit);
   const off = !canvasFilterSupported;
+  const thumb = asset?.thumbUrl;
   return (
-    <Section title="Color & Effects" action={<ResetButton label="Reset effects" onClick={() => set(defaultEffects(), true)} />}>
+    <Section
+      title="Color & Effects"
+      action={
+        <div className="flex">
+          <SaveButton label="Save effects as preset" onClick={() => savePreset('effects', e, 'My look')} />
+          <ResetButton label="Reset effects" onClick={() => set(defaultEffects(), true)} />
+        </div>
+      }
+    >
       {off && (
         <p className="pb-1 text-[11px] leading-snug text-muted">
           This browser does not support canvas filters, so color effects are unavailable here.
         </p>
       )}
+      {!off && (
+        <div className="no-scrollbar -mx-3 mb-1 flex gap-2 overflow-x-auto px-3 pb-1" role="listbox" aria-label="Looks">
+          {LOOKS.map((l) => {
+            const fx = lookEffects(l.id);
+            return (
+              <button
+                key={l.id}
+                className="flex w-[64px] shrink-0 flex-col items-center gap-1 text-[10.5px] text-muted hover:text-text"
+                onClick={() => set(fx, true)}
+                aria-label={`Look ${l.name}`}
+              >
+                <span
+                  className="block h-11 w-16 overflow-hidden rounded-md border border-line bg-elevated"
+                  style={{
+                    backgroundImage: thumb ? `url(${thumb})` : 'linear-gradient(135deg,#d98c5f,#5f8fd9 55%,#6fcf97)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    filter: filterString(fx, null, 0.2),
+                  }}
+                />
+                {l.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <SliderField disabled={off} label="Brightness" value={e.brightness} min={0} max={200} onChange={(v, c) => set({ brightness: v }, c)} />
       <SliderField disabled={off} label="Contrast" value={e.contrast} min={0} max={200} onChange={(v, c) => set({ contrast: v }, c)} />
       <SliderField disabled={off} label="Saturation" value={e.saturation} min={0} max={200} onChange={(v, c) => set({ saturation: v }, c)} />
+      <SliderField disabled={off} label="Hue °" value={e.hue} min={-180} max={180} onChange={(v, c) => set({ hue: v }, c)} />
+      <SliderField disabled={off} label="Warmth" value={e.sepia} min={0} max={100} onChange={(v, c) => set({ sepia: v }, c)} />
+      <SliderField disabled={off} label="Grayscale" value={e.grayscale} min={0} max={100} onChange={(v, c) => set({ grayscale: v }, c)} />
+      <SliderField disabled={off} label="Vignette" value={e.vignette} min={0} max={100} onChange={(v, c) => set({ vignette: v }, c)} />
       <SliderField disabled={off} label="Blur px" value={e.blur} min={0} max={40} step={0.5} onChange={(v, c) => set({ blur: v }, c)} />
     </Section>
   );
@@ -335,6 +492,11 @@ function AudioSection({ clip }: { clip: MediaClip }) {
         }}
         onChange={(v, c) => set({ pan: v }, c)}
       />
+      {clip.type === 'media' && useMediaStore.getState().assets[clip.assetId]?.kind === 'video' && !isOnAudioTrack(clip) && (
+        <button className="field mb-1 w-full text-[12px]" onClick={() => extractAudio(clip.id)}>
+          Extract audio to its own track
+        </button>
+      )}
       <SliderField label="Fade in s" value={a.fadeIn} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeIn: v }, c)} />
       <SliderField label="Fade out s" value={a.fadeOut} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeOut: v }, c)} />
     </Section>
@@ -368,14 +530,7 @@ function SpeedSection({ clip }: { clip: MediaClip }) {
   );
 }
 
-const FONTS = [
-  { value: 'Inter Variable', label: 'Inter' },
-  { value: 'Georgia', label: 'Georgia (serif)' },
-  { value: 'Helvetica Neue', label: 'Helvetica' },
-  { value: 'Avenir Next', label: 'Avenir Next' },
-  { value: 'Menlo', label: 'Menlo (mono)' },
-  { value: 'Courier New', label: 'Courier' },
-];
+
 
 function TextSection({ clip }: { clip: TextClip }) {
   const patch = usePatch(clip.id);
@@ -383,9 +538,10 @@ function TextSection({ clip }: { clip: TextClip }) {
   const set = (p: Partial<TextClip['style']>, commit = true) =>
     patch((c) => ({ ...(c as TextClip), style: { ...(c as TextClip).style, ...p } }), commit);
   return (
-    <Section title="Text">
+    <Section title="Text" action={<SaveButton label="Save text style as preset" onClick={() => savePreset('textStyle', s, 'My text style')} />}>
       <textarea
         className="field !h-auto min-h-[64px] w-full resize-y py-1.5 text-[13px]"
+        dir="auto"
         value={clip.text}
         aria-label="Text content"
         onFocus={() => useProjectStore.getState().begin()}
@@ -397,11 +553,24 @@ function TextSection({ clip }: { clip: TextClip }) {
         }}
       />
       <Row label="Font">
-        <select className="field w-full" value={s.fontFamily} aria-label="Font" onChange={(e) => set({ fontFamily: e.target.value })}>
-          {FONTS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
+        <select
+          className="field w-full"
+          value={s.fontFamily}
+          aria-label="Font"
+          onChange={(e) => {
+            const fontFamily = e.target.value;
+            void ensureFont(fontFamily);
+            set({ fontFamily });
+          }}
+        >
+          {(['arabic', 'latin', 'system'] as const).map((g) => (
+            <optgroup key={g} label={g === 'arabic' ? 'عربي · Arabic' : g === 'latin' ? 'Latin' : 'System'}>
+              {FONTS.filter((f) => f.script === g).map((f) => (
+                <option key={f.family} value={f.family}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </Row>
@@ -557,6 +726,7 @@ function ProjectInspector() {
 export function Inspector({ onClose }: { onClose?: () => void }) {
   const clip = useProjectStore((s) => (s.selectedClipId ? s.project.clips[s.selectedClipId] : null));
   const transitionId = useProjectStore((s) => s.selectedTransitionId);
+  const onAudioTrack = useProjectStore((s) => (clip ? s.project.tracks.find((t) => t.id === clip.trackId)?.kind === 'audio' : false));
   const asset = useMediaStore((s) => (clip?.type === 'media' ? s.assets[clip.assetId] : undefined));
 
   let body;
@@ -569,11 +739,11 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
         <TransformSection key={clip.id} clip={clip} />
         <AnimationSection clip={clip} />
         <TransitionInSection clip={clip} />
-        <EffectsSection clip={clip} />
+        <EffectsSection clip={clip} asset={asset} />
       </>
     );
   else if (!asset) body = <p className="p-3 text-[12px] text-muted">The media for this clip was removed.</p>;
-  else if (asset.kind === 'audio')
+  else if (asset.kind === 'audio' || onAudioTrack)
     body = (
       <>
         <AudioSection clip={clip} />
@@ -588,7 +758,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
         <TransitionInSection clip={clip} />
         <CropSection clip={clip} />
         {asset.kind === 'video' && <SpeedSection clip={clip} />}
-        <EffectsSection clip={clip} />
+        <EffectsSection clip={clip} asset={asset} />
         {asset.kind === 'video' && <AudioSection clip={clip} />}
       </>
     );

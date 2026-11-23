@@ -27,6 +27,9 @@ export interface Track {
   name: string;
   muted: boolean;
   hidden: boolean;
+  /** Track gain multiplier (1 = unity). */
+  volume?: number;
+  solo?: boolean;
 }
 
 export interface Crop {
@@ -50,6 +53,8 @@ export interface Transform {
   anchorY: number;
   /** Fractions (0..1) removed from each source edge. */
   crop: Crop;
+  flipH?: boolean;
+  flipV?: boolean;
 }
 
 export interface Effects {
@@ -57,6 +62,10 @@ export interface Effects {
   contrast: number; // 100 = neutral
   saturation: number; // 100 = neutral
   blur: number; // px in project space
+  hue: number; // degrees
+  sepia: number; // 0–100
+  grayscale: number; // 0–100
+  vignette: number; // 0–100
 }
 
 export interface AudioProps {
@@ -91,7 +100,7 @@ export interface Keyframe {
 
 export type Keyframes = Partial<Record<AnimProp, Keyframe[]>>;
 
-export type TransitionType = 'fade' | 'dissolve' | 'slide' | 'zoom';
+export type TransitionType = 'fade' | 'dissolve' | 'slide' | 'zoom' | 'wipe' | 'iris' | 'cover' | 'flash' | 'blur' | 'spin';
 export type Direction = 'left' | 'right' | 'up' | 'down';
 
 /** A transition from the previous adjacent clip into this one, centred on the cut. */
@@ -145,8 +154,17 @@ export interface ProjectSettings {
   background: string;
 }
 
+export interface Marker {
+  id: string;
+  /** Timeline time in seconds. */
+  t: number;
+  label: string;
+  color: string;
+}
+
 export interface Project {
   settings: ProjectSettings;
+  markers?: Marker[];
   /** Index 0 is the top row in the timeline (and the top-most visual layer). */
   tracks: Track[];
   clips: Record<string, Clip>;

@@ -2,8 +2,9 @@ import { Menu } from '../../components/Menu';
 import { engine } from '../../engine/playback/engine';
 import { clipEnd } from '../../engine/timeline/model';
 import { useProjectStore } from '../../stores/projectStore';
+import { useMediaStore } from '../../stores/mediaStore';
 import { useUIStore } from '../../stores/uiStore';
-import { addTransition, deleteSelected, duplicateSelected, moveSelectedToTrack, splitAtPlayhead } from './actions';
+import { addTransition, extractAudio, deleteSelected, duplicateSelected, moveSelectedToTrack, splitAtPlayhead } from './actions';
 import { prevAdjacent } from '../../engine/timeline/transitions';
 
 export function ClipContextMenu({ compact }: { compact: boolean }) {
@@ -16,6 +17,7 @@ export function ClipContextMenu({ compact }: { compact: boolean }) {
   const project = useProjectStore.getState().project;
   const visualTrack = project.tracks.find((tr) => tr.id === clip.trackId)?.kind !== 'audio';
   const canTransition = visualTrack && !!prevAdjacent(project, clip);
+  const canExtract = visualTrack && clip.type === 'media' && useMediaStore.getState().assets[clip.assetId]?.kind === 'video';
   return (
     <Menu
       x={menu.x}
@@ -28,6 +30,7 @@ export function ClipContextMenu({ compact }: { compact: boolean }) {
         ...(canTransition
           ? [{ label: clip.transitionIn ? 'Edit transition in' : 'Add transition in', onSelect: () => addTransition(clip.id) }]
           : []),
+        ...(canExtract ? [{ label: 'Extract audio', onSelect: () => extractAudio(clip.id) }] : []),
         { label: 'Move to track above', onSelect: () => moveSelectedToTrack(-1) },
         { label: 'Move to track below', onSelect: () => moveSelectedToTrack(1) },
         { label: 'Jump playhead to clip', onSelect: () => engine.seek(clip.start) },

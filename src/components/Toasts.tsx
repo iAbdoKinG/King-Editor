@@ -8,7 +8,7 @@ export function Toasts() {
         <div
           key={t.id}
           className={`sheet-in max-w-md rounded-xl border px-3.5 py-2 text-[13px] shadow-xl ${
-            t.tone === 'error' ? 'border-danger/50 bg-[#2e2424] text-text' : 'border-line bg-elevated text-text'
+            t.tone === 'error' ? 'border-danger/60 bg-elevated text-text' : 'border-line bg-elevated text-text'
           }`}
         >
           {t.text}

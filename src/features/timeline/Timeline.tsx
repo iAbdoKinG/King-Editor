@@ -25,6 +25,7 @@ import { effectiveTransition, prevAdjacent } from '../../engine/timeline/transit
 import { ClipView } from './ClipView';
 import { ASSET_DRAG_TYPE, DRAG_SLOP, HEADER_W, HEADER_W_COMPACT, LONG_PRESS_MS, RULER_H, SNAP_PX, TRACK_H, TRACK_H_COMPACT } from './constants';
 import { Ruler } from './Ruler';
+import { MarkerPopover } from './MarkerPopover';
 import { TrackHeader } from './TrackHeader';
 
 type Mode = 'pending-clip' | 'pending-empty' | 'pending-transition' | 'move' | 'trim-start' | 'trim-end' | 'scrub' | 'none';
@@ -63,12 +64,24 @@ export function Timeline({ compact }: { compact: boolean }) {
   const snapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const pointers = useRef(new Set<number>());
+  const lastTap = useRef({ id: '', at: 0 });
   const pendingScroll = useRef<number | null>(null);
   const scrollerWidth = useRef(0);
   const scrollerLeft = useRef(0);
   const ppsRef = useRef(pps);
   ppsRef.current = pps;
   const [view, setView] = useState({ left: 0, width: 1200 });
+  const [markerEdit, setMarkerEdit] = useState<{ id: string; x: number; y: number } | null>(null);
+  useEffect(() => {
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      const el = document.querySelector(`[data-marker-id="${id}"]`);
+      const r = el?.getBoundingClientRect();
+      setMarkerEdit({ id, x: r ? r.left + r.width / 2 : innerWidth / 2, y: r ? r.bottom + 6 : innerHeight / 2 });
+    };
+    window.addEventListener('king:edit-marker', open);
+    return () => window.removeEventListener('king:edit-marker', open);
+  }, []);
 
   const trackH = compact ? TRACK_H_COMPACT : TRACK_H;
   const lanes: LaneLayout[] = useMemo(() => {
@@ -420,7 +433,17 @@ export function Timeline({ compact }: { compact: boolean }) {
     }
     if (cancelled) return;
     if (d.mode === 'pending-transition' && d.clipId) addTransition(d.clipId);
-    else if (d.mode === 'pending-clip' && d.clipId) ps.select(d.clipId);
+    else if (d.mode === 'pending-clip' && d.clipId) {
+      ps.select(d.clipId);
+      // Double-tap opens the clip's properties (touch and mouse alike).
+      const now = performance.now();
+      if (lastTap.current.id === d.clipId && now - lastTap.current.at < 320) {
+        const ui = useUIStore.getState();
+        if (compact) ui.set({ sheet: 'inspector' });
+        else ui.set({ inspectorOpen: true, focusMode: false });
+        lastTap.current = { id: '', at: 0 };
+      } else lastTap.current = { id: d.clipId, at: now };
+    }
     else if (d.mode === 'pending-empty') {
       ps.select(null);
       engine.seek(d.t0);
@@ -469,6 +492,7 @@ export function Timeline({ compact }: { compact: boolean }) {
 
   return (
     <div className="flex min-h-0 flex-1">
+      {markerEdit && <MarkerPopover id={markerEdit.id} x={markerEdit.x} y={markerEdit.y} onClose={() => setMarkerEdit(null)} />}
       {/* Track headers */}
       <div
         className="relative shrink-0 overflow-hidden border-r border-line bg-surface"
@@ -515,6 +539,32 @@ export function Timeline({ compact }: { compact: boolean }) {
             <div className="sticky left-0 inline-block align-top">
               <Ruler scroller={scroller} pps={pps} />
             </div>
+            {(project.markers ?? []).map((m) => (
+              <button
+                key={m.id}
+                data-marker-id={m.id}
+                aria-label={`Marker ${m.label || ''} at ${m.t.toFixed(2)} seconds`}
+                title={m.label || 'Marker'}
+                className="absolute top-0 z-10 flex h-full w-6 -translate-x-1/2 items-start justify-center"
+                style={{ left: m.t * pps }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  engine.clock.pause();
+                  engine.seek(m.t);
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setMarkerEdit({ id: m.id, x: r.left + r.width / 2, y: r.bottom + 6 });
+                }}
+              >
+                <svg width="12" height="16" viewBox="0 0 12 16" className="mt-0.5 drop-shadow">
+                  <path d="M1 1h10v8l-5 5-5-5z" fill={m.color} />
+                </svg>
+                {m.label && (
+                  <span className="pointer-events-none absolute left-4 top-0.5 max-w-[120px] truncate whitespace-nowrap rounded bg-black/50 px-1 text-[10px] font-medium text-text">
+                    {m.label}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
 
           {lanes.map((l, i) => (
@@ -593,6 +643,13 @@ export function Timeline({ compact }: { compact: boolean }) {
             </div>
           )}
 
+          {(project.markers ?? []).map((m) => (
+            <div
+              key={m.id}
+              className="pointer-events-none absolute z-[2] w-px opacity-45"
+              style={{ left: m.t * pps, top: RULER_H, height: totalH, background: m.color }}
+            />
+          ))}
           <div
             ref={snapRef}
             className="pointer-events-none absolute top-0 z-30 hidden w-px bg-accent-strong"

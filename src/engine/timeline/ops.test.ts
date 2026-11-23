@@ -157,3 +157,36 @@ describe('timeline ops', () => {
     expect(snapTime(1.2, [0, 1, 2], 0.05).snapped).toBeNull();
   });
 });
+
+describe('markers', () => {
+  it('adds, dedupes, updates, removes and snaps', async () => {
+    const { addMarker, updateMarker, removeMarker, snapCandidates } = await import('./ops');
+    let p = createProject();
+    let id: string;
+    [p, id] = addMarker(p, 2.01);
+    expect(p.markers![0].t).toBeCloseTo(2);
+    const [p2, id2] = addMarker(p, 2);
+    expect(id2).toBe(id);
+    expect(p2.markers!.length).toBe(1);
+    p = updateMarker(p, id, { label: 'Intro' });
+    expect(p.markers![0].label).toBe('Intro');
+    expect(snapCandidates(p, null, 0)).toContain(2);
+    p = removeMarker(p, id);
+    expect(p.markers!.length).toBe(0);
+  });
+});
+
+describe('track gain', () => {
+  it('combines mute, solo and volume', async () => {
+    const { trackGain } = await import('./model');
+    const p = createProject();
+    const [v, a] = p.tracks;
+    expect(trackGain(p, a)).toBe(1);
+    const p2 = { ...p, tracks: [{ ...v, solo: true }, { ...a, volume: 0.5 }] };
+    expect(trackGain(p2, p2.tracks[1])).toBe(0);
+    expect(trackGain(p2, p2.tracks[0])).toBe(1);
+    const p3 = { ...p, tracks: [v, { ...a, volume: 0.5 }] };
+    expect(trackGain(p3, p3.tracks[1])).toBe(0.5);
+    expect(trackGain(p3, { ...a, muted: true })).toBe(0);
+  });
+});

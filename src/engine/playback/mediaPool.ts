@@ -12,7 +12,7 @@ import type { MediaAsset, MediaClip, Project } from '../../types/project';
 import { audioGraph, fadeEnvelope } from '../audio/audioGraph';
 import { clamp } from '../../utils/time';
 import { imageFrame, type Frame } from '../rendering/compositor';
-import { frameSize } from '../timeline/model';
+import { frameSize, trackGain } from '../timeline/model';
 import { allMixesAt, clipRange } from '../timeline/transitions';
 
 type Kind = 'video' | 'audio';
@@ -22,6 +22,8 @@ export interface Slot {
   el: HTMLVideoElement | HTMLAudioElement;
   /** Positioned wrapper used by the GPU (DOM) preview stage; video slots only. */
   wrap: HTMLDivElement | null;
+  /** Frame-sized clipper around `wrap` (transition clip regions). */
+  outer: HTMLDivElement | null;
   clipId: string | null;
   url: string | null;
   seeking: boolean;
@@ -81,15 +83,19 @@ export class MediaPool {
       el.setAttribute('webkit-playsinline', '');
     }
     let wrap: HTMLDivElement | null = null;
+    let outer: HTMLDivElement | null = null;
     if (el instanceof HTMLVideoElement) {
+      outer = document.createElement('div');
+      Object.assign(outer.style, { position: 'absolute', inset: '0', visibility: 'hidden', pointerEvents: 'none' });
       wrap = document.createElement('div');
-      Object.assign(wrap.style, { position: 'absolute', left: '0', top: '0', overflow: 'hidden', transformOrigin: '0 0', visibility: 'hidden' });
+      Object.assign(wrap.style, { position: 'absolute', left: '0', top: '0', overflow: 'hidden', transformOrigin: '0 0' });
+      outer.appendChild(wrap);
       Object.assign(el.style, { position: 'absolute', left: '0', top: '0', maxWidth: 'none', objectFit: 'fill', display: 'block' });
       el.removeAttribute('width');
       el.removeAttribute('height');
       wrap.appendChild(el);
     }
-    const slot: Slot = { kind, el, wrap, clipId: null, url: null, seeking: false, pendingSeek: null, playPending: false, lastUsed: 0 };
+    const slot: Slot = { kind, el, wrap, outer, clipId: null, url: null, seeking: false, pendingSeek: null, playPending: false, lastUsed: 0 };
     el.addEventListener('seeked', () => {
       slot.seeking = false;
       if (slot.pendingSeek !== null) {
@@ -101,7 +107,7 @@ export class MediaPool {
     });
     el.addEventListener('loadeddata', () => this.onFrame());
     el.addEventListener('canplay', () => this.onFrame());
-    this.container.appendChild(wrap ?? el);
+    this.container.appendChild(outer ?? el);
     return slot;
   }
 
@@ -243,7 +249,9 @@ export class MediaPool {
 
     // 3. Assign free slots.
     for (const w of wanted) {
-      const kind: Kind = w.asset.kind === 'audio' ? 'audio' : 'video';
+      // Clips on audio tracks only need sound, even when the source is a video file.
+      const onAudioTrack = trackById.get(w.clip.trackId)?.kind === 'audio';
+      const kind: Kind = w.asset.kind === 'audio' || onAudioTrack ? 'audio' : 'video';
       let slot = this.byClip.get(w.clip.id);
       if (slot && slot.url !== w.asset.url) this.assign(slot, w.clip, w.asset);
       if (slot) continue;
@@ -326,11 +334,12 @@ export class MediaPool {
 
       // Audio level for this element.
       const mix = mixes.get(clip.id);
-      const silent = !mix || !playing || !track || track.muted;
+      const tGain = trackGain(project, track);
+      const silent = !mix || !playing || tGain <= 0;
       const lt = t - clip.start;
       const level = silent
         ? 0
-        : clip.audio.volume * mix.audio * fadeEnvelope(clamp(lt, 0, clip.duration), clip.duration, clip.audio.fadeIn, clip.audio.fadeOut);
+        : tGain * clip.audio.volume * mix.audio * fadeEnvelope(clamp(lt, 0, clip.duration), clip.duration, clip.audio.fadeIn, clip.audio.fadeOut);
       if (graph) {
         const nodes = audioGraph.attach(el);
         if (nodes) {

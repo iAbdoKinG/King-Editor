@@ -3,11 +3,13 @@
  * Preview and export call this same function, so both always apply
  * identical transforms, keyframes, effects and transitions.
  */
-import type { Effects, MediaAsset, Project, TextClip } from '../../types/project';
+import type { MediaAsset, Project, TextClip } from '../../types/project';
+import { filterString } from './filters';
 import { resolveTransform } from '../timeline/animation';
 import { frameSize } from '../timeline/model';
 import { trackLayersAt, type Layer } from '../timeline/transitions';
 import { clipBox, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD } from './geometry';
+import { isRtl } from '../../utils/text';
 import { imageCache } from './imageCache';
 
 export const canvasFilterSupported: boolean = (() => {
@@ -41,15 +43,6 @@ export function imageFrame(img: CanvasImageSource, w: number, h: number): Frame 
   };
 }
 
-function filterString(e: Effects, pxScale: number): string {
-  const parts: string[] = [];
-  if (e.brightness !== 100) parts.push(`brightness(${e.brightness}%)`);
-  if (e.contrast !== 100) parts.push(`contrast(${e.contrast}%)`);
-  if (e.saturation !== 100) parts.push(`saturate(${e.saturation}%)`);
-  if (e.blur > 0) parts.push(`blur(${(e.blur * pxScale).toFixed(2)}px)`);
-  return parts.length ? parts.join(' ') : 'none';
-}
-
 /** Visual layers at `t`, bottom first (lower tracks first, then outgoing before incoming). */
 export function visibleLayersAt(project: Project, assets: Record<string, MediaAsset>, t: number): Layer[] {
   const { width: W, height: H } = frameSize(project.settings);
@@ -77,7 +70,7 @@ export interface RenderOptions {
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, opts: RenderOptions): void {
-  const { project, assets, t, source } = opts;
+  const { project, assets, t } = opts;
   const canvas = ctx.canvas;
   const { width: W, height: H } = frameSize(project.settings);
   const k = canvas.width / W; // project px -> canvas px
@@ -87,27 +80,52 @@ export function renderFrame(ctx: CanvasRenderingContext2D, opts: RenderOptions):
   ctx.fillStyle = project.settings.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (const { clip, mix } of visibleLayersAt(project, assets, t)) {
-    const tr = resolveTransform(clip, t - clip.start);
-    const box = clipBox(clip, assets, W, H, tr);
-    if (!box) continue;
-    const alpha = Math.min(1, tr.opacity) * mix.alpha;
-    if (alpha <= 0.001) continue;
-    // Transition transform (around the frame centre), then the clip transform.
-    const ms = mix.scale;
-    ctx.setTransform(k * ms, 0, 0, k * ms, k * ((W / 2) * (1 - ms) + mix.dx), k * ((H / 2) * (1 - ms) + mix.dy));
-    ctx.translate(box.cx, box.cy);
-    ctx.rotate(box.rot);
-    ctx.scale(box.sx, box.sy);
-    ctx.globalAlpha = alpha;
-    if (canvasFilterSupported) ctx.filter = filterString(clip.effects, k * ms * Math.abs(box.sx));
-    const x0 = -box.w * box.ax;
-    const y0 = -box.h * box.ay;
-
-    if (clip.type === 'text') {
-      drawText(ctx, clip, x0, y0);
-      continue;
+  for (const layer of visibleLayersAt(project, assets, t)) {
+    ctx.save();
+    try {
+      drawLayer(ctx, layer, opts, W, H, k);
+    } finally {
+      ctx.restore();
     }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  if (canvasFilterSupported) ctx.filter = 'none';
+}
+
+function drawLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: RenderOptions, W: number, H: number, k: number): void {
+  const { assets, t, source } = opts;
+  const tr = resolveTransform(clip, t - clip.start);
+  const box = clipBox(clip, assets, W, H, tr);
+  if (!box) return;
+  const alpha = Math.min(1, tr.opacity) * mix.alpha;
+  if (alpha <= 0.001) return;
+
+  // Transition clip region, in frame space.
+  if (mix.clip) {
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.beginPath();
+    if (mix.clip.kind === 'inset') {
+      const c = mix.clip;
+      ctx.rect(W * c.left, H * c.top, Math.max(0, W * (1 - c.left - c.right)), Math.max(0, H * (1 - c.top - c.bottom)));
+    } else ctx.arc(W / 2, H / 2, (mix.clip.r * Math.hypot(W, H)) / 2, 0, Math.PI * 2);
+    ctx.clip();
+  }
+  // Transition transform around the frame centre, then the clip transform.
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.translate(W / 2 + mix.dx, H / 2 + mix.dy);
+  if (mix.rotate) ctx.rotate((mix.rotate * Math.PI) / 180);
+  ctx.scale(mix.scale, mix.scale);
+  ctx.translate(-W / 2 + box.cx, -H / 2 + box.cy);
+  ctx.rotate(box.rot);
+  ctx.scale(box.sx, box.sy);
+  ctx.globalAlpha = alpha;
+  if (canvasFilterSupported) ctx.filter = filterString(clip.effects, mix, k * mix.scale * Math.abs(box.sx));
+  const x0 = -box.w * box.ax;
+  const y0 = -box.h * box.ay;
+
+  if (clip.type === 'text') drawText(ctx, clip, x0, y0);
+  else {
     const a = assets[clip.assetId];
     let frame: Frame | null = null;
     if (a.kind === 'image') {
@@ -118,7 +136,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, opts: RenderOptions):
         frame = imageFrame(img, w, h);
       }
     } else frame = source.getFrame(clip.id);
-    if (!frame) continue;
+    if (!frame) return;
     const c = tr.crop;
     try {
       frame.draw(
@@ -133,12 +151,24 @@ export function renderFrame(ctx: CanvasRenderingContext2D, opts: RenderOptions):
         box.h,
       );
     } catch {
-      /* frame not decodable yet */
+      return; /* frame not decodable yet */
     }
   }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = 1;
-  if (canvasFilterSupported) ctx.filter = 'none';
+  const v = clip.effects.vignette ?? 0;
+  if (v > 0) {
+    if (canvasFilterSupported) ctx.filter = 'none';
+    // Same geometry as CSS `radial-gradient(ellipse at center …)` (farthest-corner ellipse).
+    ctx.beginPath();
+    ctx.rect(x0, y0, box.w, box.h);
+    ctx.clip();
+    ctx.translate(x0 + box.w / 2, y0 + box.h / 2);
+    ctx.scale((box.w / 2) * Math.SQRT2, (box.h / 2) * Math.SQRT2);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0.45, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(0,0,0,${(Math.min(1, v / 100) * 0.85).toFixed(3)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(-1, -1, 2, 2);
+  }
 }
 
 function drawText(ctx: CanvasRenderingContext2D, c: TextClip, x0: number, y0: number): void {
@@ -154,6 +184,7 @@ function drawText(ctx: CanvasRenderingContext2D, c: TextClip, x0: number, y0: nu
     ctx.fill();
   }
   ctx.font = textFont(c);
+  ctx.direction = isRtl(c.text) ? 'rtl' : 'ltr';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillStyle = s.color;
@@ -172,4 +203,5 @@ function drawText(ctx: CanvasRenderingContext2D, c: TextClip, x0: number, y0: nu
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
+  ctx.direction = 'ltr';
 }

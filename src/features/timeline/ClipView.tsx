@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { Clip, MediaAsset, TrackKind } from '../../types/project';
 import { HANDLE_W } from './constants';
 import { keyframeTimes } from '../../engine/timeline/animation';
+import { WaveformView } from './WaveformView';
 
 interface Props {
   clip: Clip;
@@ -23,7 +24,7 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
   const width = Math.max(3, clip.duration * pps);
   const missing = clip.type === 'media' && !asset;
   const label = clip.type === 'text' ? clip.text.split('\n')[0] || 'Text' : asset?.name ?? 'Missing media';
-  const thumb = clip.type === 'media' && asset?.thumbUrl ? asset.thumbUrl : null;
+  const thumb = clip.type === 'media' && asset?.thumbUrl && kind !== 'audio' ? asset.thumbUrl : null;
   const fadeIn = clip.type === 'media' ? clip.audio.fadeIn * pps : 0;
   const fadeOut = clip.type === 'media' ? clip.audio.fadeOut * pps : 0;
   const showFades = kind === 'audio' || (clip.type === 'media' && asset?.kind === 'video');
@@ -53,6 +54,18 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
           <div
             className="absolute inset-0 opacity-55"
             style={{ backgroundImage: `url(${thumb})`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x' }}
+          />
+        )}
+        {clip.type === 'media' && asset && (asset.kind === 'audio' || asset.kind === 'video') && (
+          <WaveformView
+            assetId={asset.id}
+            srcIn={clip.in}
+            speed={clip.speed}
+            duration={clip.duration}
+            width={width}
+            height={kind === 'audio' ? height - 22 : Math.round((height - 6) * 0.42)}
+            gain={clip.audio.volume}
+            mode={kind === 'audio' ? 'center' : 'bottom'}
           />
         )}
         {showFades && fadeIn > 0 && (

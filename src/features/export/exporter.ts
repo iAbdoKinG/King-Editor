@@ -34,7 +34,7 @@ import type { Clip, MediaAsset, MediaClip, Project } from '../../types/project';
 import { fadeEnvelope } from '../../engine/audio/audioGraph';
 import { imageFrame, renderFrame, visibleLayersAt, type Frame, type FrameSource } from '../../engine/rendering/compositor';
 import { imageCache } from '../../engine/rendering/imageCache';
-import { frameSize, projectDuration } from '../../engine/timeline/model';
+import { frameSize, projectDuration, trackGain } from '../../engine/timeline/model';
 import { clipRange, trackLayersAt } from '../../engine/timeline/transitions';
 import { getAssetFile } from '../../stores/mediaStore';
 import { clamp } from '../../utils/time';
@@ -74,7 +74,7 @@ function hasAudibleAudio(project: Project, assets: Record<string, MediaAsset>): 
     if (c.type !== 'media' || c.audio.volume <= 0) return false;
     const a = assets[c.assetId];
     const tr = project.tracks.find((t) => t.id === c.trackId);
-    return !!a && !!tr && !tr.muted && (a.kind === 'audio' || a.kind === 'video');
+    return !!a && trackGain(project, tr) > 0 && (a.kind === 'audio' || a.kind === 'video');
   });
 }
 
@@ -309,7 +309,8 @@ async function renderAudio(project: Project, assets: Record<string, MediaAsset>,
     if (c.type !== 'media' || c.audio.volume <= 0) continue;
     const asset = assets[c.assetId];
     const track = project.tracks.find((t) => t.id === c.trackId);
-    if (!asset || !track || track.muted || (asset.kind !== 'audio' && asset.kind !== 'video')) continue;
+    const tGain = trackGain(project, track);
+    if (!asset || tGain <= 0 || (asset.kind !== 'audio' && asset.kind !== 'video')) continue;
     const [s0, e0] = clipRange(project, c);
     let s = Math.max(0, s0);
     const e = Math.min(duration, e0);
@@ -334,7 +335,7 @@ async function renderAudio(project: Project, assets: Record<string, MediaAsset>,
       const t = s + ((e - s) * i) / (steps - 1);
       const mix = trackLayersAt(project, c.trackId, Math.min(t, e - 1e-6), W, H).find((l) => l.clip.id === c.id)?.mix;
       const lt = clamp(t - c.start, 0, c.duration);
-      curve[i] = c.audio.volume * (mix?.audio ?? 0) * fadeEnvelope(lt, c.duration, c.audio.fadeIn, c.audio.fadeOut);
+      curve[i] = tGain * c.audio.volume * (mix?.audio ?? 0) * fadeEnvelope(lt, c.duration, c.audio.fadeIn, c.audio.fadeOut);
     }
     gain.gain.setValueCurveAtTime(curve, s, e - s);
     let last: AudioNode = src.connect(gain);
@@ -363,6 +364,8 @@ export async function runExport(
   };
   onProgress(0, 'preparing');
   // Everything drawn must be ready: fonts and still images.
+  const { ensureFont } = await import('../fonts/fonts');
+  await Promise.all(Object.values(project.clips).map((c) => (c.type === 'text' ? ensureFont(c.style.fontFamily) : null)));
   await document.fonts?.ready;
   for (const c of Object.values(project.clips)) {
     if (c.type === 'media' && assets[c.assetId]?.kind === 'image') await imageCache.ensure(assets[c.assetId]);

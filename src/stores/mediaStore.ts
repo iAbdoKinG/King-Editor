@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type { MediaAsset } from '../types/project';
 import { uid } from '../utils/id';
 import { detectKind, makeThumbnail, probe } from '../features/media/probe';
+import { requestWaveform } from '../features/media/waveform';
 
 interface MediaState {
   assets: Record<string, MediaAsset>;
@@ -64,6 +65,8 @@ export const useMediaStore = create<MediaState>((set, get) => ({
           const meta = await probe(a.url, a.kind);
           if (!get().assets[id]) return;
           set((s) => ({ assets: { ...s.assets, [id]: { ...s.assets[id], ...meta, status: 'ready' } } }));
+          const f = fileStore.get(id);
+          if (f) requestWaveform(get().assets[id], f);
           const thumbUrl = await makeThumbnail(a.url, meta.kind, meta.duration);
           if (!thumbUrl) return;
           if (!get().assets[id]) {

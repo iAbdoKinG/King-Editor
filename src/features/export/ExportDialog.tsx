@@ -67,7 +67,11 @@ export function ExportDialog() {
     setPlan(null);
     void loadExporter()
       .then((m) => m.planExport(project, assets, settings))
-      .then((p) => live && setPlan(p))
+      .then((p) => {
+        if (!live) return;
+        setPlan(p);
+        if (!('error' in p)) void import('../advisor/advisor').then((a) => a.checkExport(p.duration, p.height, p.fps));
+      })
       .catch(() => live && setPlan({ error: 'Could not load the encoder. Check your connection and try again.' }));
     return () => {
       live = false;
@@ -171,7 +175,7 @@ export function ExportDialog() {
           Cancel
         </button>
         <button
-          className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-bg"
+          className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-on-accent"
           disabled={!ok}
           onClick={start}
           data-testid="export-start"
@@ -231,7 +235,7 @@ export function ExportDialog() {
         </a>
         {canShare && (
           <button
-            className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-bg"
+            className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-on-accent"
             onClick={() => void navigator.share({ files: [file!], title: r.filename }).catch(() => undefined)}
           >
             Save / Share
