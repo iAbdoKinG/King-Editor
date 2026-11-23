@@ -22,7 +22,7 @@ export function DownloadDialog() {
           </button>
         </div>
         <div className="space-y-3 px-4 py-4 text-[13px] leading-relaxed">
-          <p>{T('Free, works offline, exports up to 4K, and saves projects to your computer.')}</p>
+          <p>{T('Free, works offline, exports up to 2K, and saves projects to your computer.')}</p>
           <div className="grid gap-2 sm:grid-cols-2">
             <a className="flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-3 font-semibold text-on-accent" href={WINDOWS_DOWNLOADS.installer} rel="noopener">
               <Icon name="windows" size={16} /> {T('Installer')}

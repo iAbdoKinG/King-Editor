@@ -84,6 +84,12 @@ Keyboard: Space/K play · ←/→ frame · ⇧←/→ 1 s · S or ⌘B split · 
 - **Resource advisor**: warns once about workloads that are heavy for a browser (4K, very long media, many stacked videos, heavy blur, very long exports).
 - **Touch**: wider trim handles on touch screens; double-tap a clip to open its properties.
 
+## Frame size and export limits
+
+- Project frame: preset ratios (16:9, 9:16, 1:1, 4:5, 4:3) at 720p / 1080p / 2K, or **Custom size** with independent width and height (128–2560 px each, even numbers, swap button).
+- Clip size: Width % and Height % can be unlinked to scale a clip non-uniformly.
+- Export: 720p / 1080p / **2K maximum** (long edge ≤ 2560, short edge ≤ 1440), proportional to the project frame.
+
 ## Languages
 
 English and **Arabic** (full translation, right-to-left layout, Arabic UI font). The timeline, ruler, preview and playback controls stay left-to-right because time flows left → right. Switch with the **ع / EN** button (or ⋯ on phones); the choice is remembered. Strings live in `src/i18n/ar.ts` (English text is the key).
@@ -95,7 +101,7 @@ An Electron shell around the same app. It is built automatically on GitHub's Win
 - Installer: `KING-EDITOR-Setup.exe` · Portable: `KING-EDITOR-Portable.exe`
 - **Projects**: save/open `.kingproj` files (Ctrl+S / Ctrl+Shift+S / Ctrl+O, double-click to open). The file stores the timeline and media *paths*, never the media itself, and it is fully validated on load.
 - **Media streaming**: `media://` serves local files with HTTP Range, so large videos are never loaded into memory. Only files the user picked, or that an opened project references, are served.
-- **4K export**, no browser resource warnings, works offline (`app://`), and the native Save dialog is used for exported videos.
+- Exports up to **2K** (like the web version), no browser resource warnings, works offline (`app://`), and the native Save dialog is used for exported videos.
 - Hardened: context isolation, sandbox, no Node.js in the page, navigation locked to the app.
 - The app is not code-signed, so Windows SmartScreen shows a warning on first run ("More info" → "Run anyway").
 

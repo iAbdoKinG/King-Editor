@@ -5,6 +5,7 @@ import { engine } from '../../engine/playback/engine';
 import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore, type PreviewQuality } from '../../stores/uiStore';
 import type { AspectPreset } from '../../types/project';
+import { frameSize, withAspect } from '../../engine/timeline/model';
 import { formatTimecode } from '../../utils/time';
 import { seekBy, stepFrames, togglePlay } from '../timeline/actions';
 
@@ -45,6 +46,11 @@ function Timecode({ compact }: { compact: boolean }) {
 export function Transport({ compact, onFullscreen }: { compact: boolean; onFullscreen: () => void }) {
   const playing = usePlaying();
   const aspect = useProjectStore((s) => s.project.settings.aspect);
+  const settings = useProjectStore((s) => s.project.settings);
+  const customLabel = aspect === 'custom' ? (() => {
+    const f = frameSize(settings);
+    return `${f.width}×${f.height}`;
+  })() : T('Custom');
   const apply = useProjectStore((s) => s.apply);
   const quality = useUIStore((s) => s.quality);
   const renderer = useUIStore((s) => s.renderer);
@@ -86,11 +92,23 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
           className="field !h-8 !w-auto !pr-1 text-[12px]"
           aria-label={T("Aspect ratio")}
           value={aspect}
-          onChange={(e) => apply((p) => ({ ...p, settings: { ...p.settings, aspect: e.target.value as AspectPreset } }))}
+          onChange={(e) => {
+            const v = e.target.value as AspectPreset;
+            apply((p) => ({ ...p, settings: withAspect(p.settings, v) }));
+            // Custom size is entered in the project settings.
+            if (v === 'custom') {
+              useProjectStore.getState().select(null);
+              if (compact) setUI({ sheet: 'inspector' });
+              else setUI({ inspectorOpen: true, focusMode: false });
+            }
+          }}
         >
           {(['16:9', '9:16', '1:1', '4:5', '4:3'] as AspectPreset[]).map((a) => (
-            <option key={a}>{a}</option>
+            <option key={a} value={a}>
+              {a}
+            </option>
           ))}
+          <option value="custom">{customLabel}</option>
         </select>
         {!compact && renderer === 'canvas' && (
           <select

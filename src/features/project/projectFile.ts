@@ -5,7 +5,7 @@
  * editor into an invalid state.
  */
 import type { AspectPreset, AudioProps, Clip, Marker, MediaAsset, MediaKind, Project, Track, TrackKind, Transform } from '../../types/project';
-import { defaultAudio, defaultSettings, defaultTransform } from '../../engine/timeline/model';
+import { clampDimension, defaultAudio, defaultSettings, defaultTransform } from '../../engine/timeline/model';
 import { cleanAnimation, cleanEffects, cleanTextStyle, cleanTransition } from '../presets/presets';
 
 export interface ProjectFileAsset {
@@ -134,8 +134,10 @@ export function parseProjectFile(text: string): ParsedProject {
   const s = isObj(p.settings) ? p.settings : {};
   const settings = {
     name: str(s.name, 200, ds.name),
-    aspect: oneOf(s.aspect, ['16:9', '9:16', '1:1', '4:5', '4:3'] as AspectPreset[], ds.aspect),
-    resolution: oneOf(s.resolution, [720, 1080] as const, ds.resolution),
+    aspect: oneOf(s.aspect, ['16:9', '9:16', '1:1', '4:5', '4:3', 'custom'] as AspectPreset[], ds.aspect),
+    resolution: oneOf(s.resolution, [720, 1080, 1440] as const, ds.resolution),
+    customWidth: typeof s.customWidth === 'number' ? clampDimension(s.customWidth) : undefined,
+    customHeight: typeof s.customHeight === 'number' ? clampDimension(s.customHeight) : undefined,
     fps: oneOf(s.fps, [24, 25, 30, 60] as const, ds.fps),
     background: color(s.background, ds.background),
   };

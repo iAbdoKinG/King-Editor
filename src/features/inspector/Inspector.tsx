@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { t as T } from '../../i18n';
-import type { AnimProp, Clip, Direction, Easing, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform, Transition, TransitionType } from '../../types/project';
+import type { AnimProp, AspectPreset, Clip, Direction, Easing, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform, Transition, TransitionType } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
 import {
   ANIM_PROPS,
@@ -33,7 +33,7 @@ function isOnAudioTrack(clip: Clip): boolean {
 }
 import { Icon } from '../../components/Icon';
 import { canvasFilterSupported } from '../../engine/rendering/compositor';
-import { defaultAudio, defaultEffects, defaultTransform, frameSize } from '../../engine/timeline/model';
+import { MAX_EDGE, MIN_EDGE, clampDimension, defaultAudio, defaultEffects, defaultTransform, frameSize, withAspect } from '../../engine/timeline/model';
 import { setClipSpeed, updateClip } from '../../engine/timeline/ops';
 import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -117,14 +117,14 @@ function TransformSection({ clip }: { clip: Clip }) {
         />
       ) : (
         <>
-          <SliderField label={T("Scale X %")} value={base.scaleX} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleX: v }, c)} />
-          <SliderField label={T("Scale Y %")} value={base.scaleY} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleY: v }, c)} />
+          <SliderField label={T("Width %")} value={base.scaleX} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleX: v }, c)} />
+          <SliderField label={T("Height %")} value={base.scaleY} min={0.05} max={4} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ scaleY: v }, c)} />
         </>
       )}
       {!scaleAnimated && (
-        <Row label={T("Uniform")}>
+        <Row label={T("Link")}>
           <Toggle
-            label={T("Uniform scale")}
+            label={T("Link width & height")}
             checked={uniform}
             onChange={(on) => {
               setUniform(on);
@@ -639,6 +639,42 @@ function ClipHeader({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
   );
 }
 
+/** Numeric pixel field that commits on Enter/blur (clamped to the allowed range, even numbers). */
+function DimensionField({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  const shown = editing ? text : String(value);
+  const commit = () => {
+    setEditing(false);
+    const v = clampDimension(parseFloat(text));
+    setText(String(v));
+    if (v !== value) onCommit(v);
+  };
+  return (
+    <label className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="text-[10px] text-muted">{label}</span>
+      <input
+        className="field tnum w-full text-center text-[13px]"
+        dir="ltr"
+        inputMode="numeric"
+        aria-label={label}
+        value={shown}
+        onFocus={(e) => {
+          setEditing(true);
+          setText(String(value));
+          e.target.select();
+        }}
+        onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ''))}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+      />
+    </label>
+  );
+}
+
 function ProjectInspector() {
   const settings = useProjectStore((s) => s.project.settings);
   const apply = useProjectStore((s) => s.apply);
@@ -656,23 +692,51 @@ function ProjectInspector() {
       </div>
       <Section title={T("Format")}>
         <Row label={T("Aspect")}>
-          <select className="field w-full" aria-label={T("Aspect ratio")} value={settings.aspect} onChange={(e) => set({ aspect: e.target.value as ProjectSettings['aspect'] })}>
-            {['16:9', '9:16', '1:1', '4:5', '4:3'].map((a) => (
-              <option key={a}>{a}</option>
+          <select
+            className="field w-full"
+            aria-label={T("Aspect ratio")}
+            value={settings.aspect}
+            onChange={(e) => apply((pr) => ({ ...pr, settings: withAspect(pr.settings, e.target.value as AspectPreset) }))}
+          >
+            {(['16:9', '9:16', '1:1', '4:5', '4:3'] as const).map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
             ))}
+            <option value="custom">{T('Custom size')}</option>
           </select>
         </Row>
-        <Row label={T("Resolution")}>
-          <Segmented
-            label={T("Resolution")}
-            value={settings.resolution}
-            options={[
-              { value: 720, label: '720p' },
-              { value: 1080, label: '1080p' },
-            ]}
-            onChange={(v) => set({ resolution: v })}
-          />
-        </Row>
+        {settings.aspect === 'custom' ? (
+          <Row label={T('Size')}>
+            <DimensionField label={T('Width')} value={width} onCommit={(v) => set({ customWidth: v })} />
+            <span className="text-muted">×</span>
+            <DimensionField label={T('Height')} value={height} onCommit={(v) => set({ customHeight: v })} />
+            <button
+              className="icon-btn !h-8 !min-w-8 shrink-0"
+              aria-label={T('Swap width and height')}
+              title={T('Swap width and height')}
+              onClick={() => set({ customWidth: height, customHeight: width })}
+            >
+              ⇄
+            </button>
+          </Row>
+        ) : (
+          <Row label={T("Resolution")}>
+            <Segmented
+              label={T("Resolution")}
+              value={settings.resolution}
+              options={[
+                { value: 720, label: '720p' },
+                { value: 1080, label: '1080p' },
+                { value: 1440, label: '2K' },
+              ]}
+              onChange={(v) => set({ resolution: v })}
+            />
+          </Row>
+        )}
+        {settings.aspect === 'custom' && (
+          <p className="text-[11px] leading-snug text-muted">{T('Each side from {min} to {max} pixels (2K maximum).', { min: MIN_EDGE, max: MAX_EDGE })}</p>
+        )}
         <Row label={T("Frame rate")}>
           <Segmented
             label={T("Frame rate")}
@@ -683,7 +747,7 @@ function ProjectInspector() {
         </Row>
         <Row label={T("Frame")}>
           <span className="tnum text-[12px] text-text/80">
-            {width} × {height}
+            <bdi dir="ltr">{width} × {height}</bdi>
           </span>
         </Row>
         <Row label={T("Background")}>

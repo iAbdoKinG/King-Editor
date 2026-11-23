@@ -96,11 +96,18 @@ async function launch() {
 
   /* ---------- 4K export from streamed media ---------- */
   await page.getByRole('button', { name: 'Export' }).first().click();
-  const has4k = await page.getByRole('radio', { name: '4K' }).count();
-  check('4K export option available on desktop', has4k === 1);
-  await page.getByRole('radio', { name: '4K' }).click();
+  const dlg = page.getByTestId('export-dialog');
+  const has2k = await dlg.getByRole('radio', { name: '2K' }).count();
+  check('2K export option (maximum)', has2k === 1 && (await dlg.getByRole('radio', { name: '4K' }).count()) === 0);
+  await dlg.getByRole('radio', { name: '2K' }).click();
   await page
-    .waitForFunction(() => !document.querySelector('[data-testid=export-start]')?.disabled || document.querySelector('[data-testid=export-dialog] .text-danger'), null, { timeout: 60000 })
+    .waitForFunction(
+      () =>
+        (document.querySelector('[data-testid=export-dialog]')?.innerText.includes('2560×1440') && !document.querySelector('[data-testid=export-start]')?.disabled) ||
+        document.querySelector('[data-testid=export-dialog] .text-danger'),
+      null,
+      { timeout: 60000 },
+    )
     .catch(() => {});
   const planText = await page.locator('[data-testid=export-dialog]').innerText();
   console.log('     dialog:', planText.replace(/\n/g, ' | ').slice(0, 300));
@@ -111,7 +118,7 @@ async function launch() {
     await page.click('[data-testid=export-start]');
     await page.waitForSelector('[data-testid=export-done], [data-testid=export-dialog] p.text-danger', { timeout: 600000 });
     const err = await page.locator('[data-testid=export-dialog] p.text-danger').count();
-    check('4K export completes', !err, err ? await page.locator('[data-testid=export-dialog] p.text-danger').innerText() : `${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    check('2K export completes', !err, err ? await page.locator('[data-testid=export-dialog] p.text-danger').innerText() : `${((Date.now() - t0) / 1000).toFixed(1)} s`);
     if (!err) {
       await page.click('[data-testid=export-download]');
       let out = null;
@@ -124,9 +131,9 @@ async function launch() {
       await page.waitForTimeout(1500);
       const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', out]).toString());
       const v = probe.streams.find((s) => s.codec_type === 'video');
-      check('ffprobe: 3840×2160 with audio', v?.width === 3840 && v?.height === 2160 && probe.streams.some((s) => s.codec_type === 'audio'), `${v?.codec_name} ${v?.width}x${v?.height}, ${probe.format.duration}s`);
+      check('ffprobe: 2560×1440 with audio', v?.width === 2560 && v?.height === 1440 && probe.streams.some((s) => s.codec_type === 'audio'), `${v?.codec_name} ${v?.width}x${v?.height}, ${probe.format.duration}s`);
     }
-  } else check('4K export plan available', false, planText.slice(0, 200));
+  } else check('2K export plan available', false, planText.slice(0, 200));
 
   check('no uncaught errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await app.close();

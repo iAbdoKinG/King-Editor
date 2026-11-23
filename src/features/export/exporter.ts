@@ -35,13 +35,14 @@ import type { Clip, MediaAsset, MediaClip, Project } from '../../types/project';
 import { fadeEnvelope } from '../../engine/audio/audioGraph';
 import { imageFrame, renderFrame, visibleLayersAt, type Frame, type FrameSource } from '../../engine/rendering/compositor';
 import { imageCache } from '../../engine/rendering/imageCache';
-import { frameSize, projectDuration, trackGain } from '../../engine/timeline/model';
+import { exportSize, frameSize, projectDuration, trackGain } from '../../engine/timeline/model';
 import { clipRange, trackLayersAt } from '../../engine/timeline/transitions';
 import { getAssetData, makeSource, readAll } from '../media/assetSource';
 import { clamp } from '../../utils/time';
 
 export interface ExportSettings {
-  height: 720 | 1080 | 2160;
+  /** Target short edge; 1440 = 2K (the maximum). */
+  height: 720 | 1080 | 1440;
   fps: 24 | 25 | 30 | 60;
 }
 
@@ -79,6 +80,23 @@ function hasAudibleAudio(project: Project, assets: Record<string, MediaAsset>): 
   });
 }
 
+/** Capability probes must never hang the dialog (some drivers stall); treat a timeout as "unsupported". */
+function withTimeout<T>(p: Promise<T>, fallback: T, ms = 6000): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
+
 /** Choose the most compatible container/codec combination this browser can actually encode. */
 export async function planExport(
   project: Project,
@@ -89,7 +107,7 @@ export async function planExport(
   if (duration <= 0) return { error: T('The timeline is empty.') };
   if (typeof (window as unknown as { VideoEncoder?: unknown }).VideoEncoder !== 'function')
     return { error: T('This browser has no video encoder (WebCodecs). Use Safari on iPadOS 16.4 or newer, or a current Chrome/Edge.') };
-  const { width, height } = frameSize({ aspect: project.settings.aspect, resolution: settings.height });
+  const { width, height } = exportSize(project.settings, settings.height);
   const needAudio = hasAudibleAudio(project, assets);
   const candidates: Array<{ container: 'mp4' | 'webm'; video: VideoCodec; audio: AudioCodec[] }> = [
     { container: 'mp4', video: 'avc', audio: ['aac', 'opus'] },
@@ -98,12 +116,12 @@ export async function planExport(
     { container: 'webm', video: 'vp8', audio: ['opus'] },
   ];
   for (const c of candidates) {
-    const okVideo = await canEncodeVideo(c.video, { width, height, frameRate: settings.fps, bitrate: QUALITY_HIGH }).catch(() => false);
+    const okVideo = await withTimeout(canEncodeVideo(c.video, { width, height, frameRate: settings.fps, bitrate: QUALITY_HIGH }), false);
     if (!okVideo) continue;
     let audioCodec: AudioCodec | null = null;
     if (needAudio) {
       for (const a of c.audio) {
-        if (await canEncodeAudio(a, { numberOfChannels: 2, sampleRate: SAMPLE_RATE, bitrate: QUALITY_HIGH }).catch(() => false)) {
+        if (await withTimeout(canEncodeAudio(a, { numberOfChannels: 2, sampleRate: SAMPLE_RATE, bitrate: QUALITY_HIGH }), false)) {
           audioCodec = a;
           break;
         }

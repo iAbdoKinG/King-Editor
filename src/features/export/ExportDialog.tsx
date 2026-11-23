@@ -128,13 +128,13 @@ export function ExportDialog() {
       <>
         <div className="grid grid-cols-[90px_1fr] items-center gap-x-3 gap-y-3">
           <span className="text-[12px] text-muted">{T("Resolution")}</span>
-          <Segmented<720 | 1080 | 2160>
+          <Segmented<720 | 1080 | 1440>
             label={T("Export resolution")}
             value={settings.height}
             options={[
               { value: 720, label: '720p' },
               { value: 1080, label: '1080p' },
-              ...(isDesktop ? [{ value: 2160 as const, label: '4K' }] : []),
+              { value: 1440, label: '2K' },
             ]}
             onChange={(v) => setSettings((s) => ({ ...s, height: v }))}
           />
@@ -153,12 +153,14 @@ export function ExportDialog() {
             <>
               <div>
                 <span className="text-muted">{T("Output:")} </span>
-                {ok.width}×{ok.height} · {ok.fps} fps · {ok.container.toUpperCase()} ({CODEC_LABEL[ok.videoCodec]}
-                {ok.audioCodec ? ` + ${CODEC_LABEL[ok.audioCodec]}` : T(', no audio')})
+                <bdi dir="ltr">
+                  {ok.width}×{ok.height} · {ok.fps} fps · {ok.container.toUpperCase()} ({CODEC_LABEL[ok.videoCodec]}
+                  {ok.audioCodec ? ` + ${CODEC_LABEL[ok.audioCodec]}` : T(', no audio')})
+                </bdi>
               </div>
               <div>
                 <span className="text-muted">{T("Length:")} </span>
-                {formatDuration(ok.duration)}
+                <bdi dir="ltr">{formatDuration(ok.duration)}</bdi>
               </div>
               {ok.container === 'webm' && (
                 <div className="mt-1 text-muted">{T("This browser cannot encode MP4, so the file will be WebM.")}</div>
@@ -216,7 +218,7 @@ export function ExportDialog() {
         <div className="text-[12px] leading-relaxed">
           <div className="font-medium text-text">{r.filename}</div>
           <div className="tnum text-muted">
-            {r.width}×{r.height} · {formatDuration(r.duration)} · {formatBytes(r.blob.size)}
+            <bdi dir="ltr">{r.width}×{r.height} · {formatDuration(r.duration)} · {formatBytes(r.blob.size)}</bdi>
           </div>
           {!r.playableHere && <div className="text-muted">{T("This browser can’t preview this format, but the file was verified as valid.")}</div>}
         </div>

@@ -57,9 +57,27 @@ export function createProject(): Project {
   return { settings: defaultSettings(), tracks, clips: {} };
 }
 
-/** Project frame size in pixels for the chosen aspect ratio and short-edge resolution. */
-export function frameSize(settings: { aspect: ProjectSettings['aspect']; resolution: number }): { width: number; height: number } {
-  const ratios: Record<AspectPreset, [number, number]> = {
+/** Largest frame edge anywhere in the app (2K = 2560×1440). */
+export const MAX_EDGE = 2560;
+export const MAX_SHORT_EDGE = 1440;
+export const MIN_EDGE = 128;
+
+/** Keep dimensions even (encoder friendly). */
+const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
+
+/** Clamp a user-entered custom dimension. */
+export function clampDimension(n: number): number {
+  return even(Math.min(MAX_EDGE, Math.max(MIN_EDGE, isFinite(n) ? n : 1080)));
+}
+
+type FrameSettings = { aspect: ProjectSettings['aspect']; resolution: number; customWidth?: number; customHeight?: number };
+
+/** Project frame size: preset aspect × short-edge resolution, or the exact custom width × height. */
+export function frameSize(settings: FrameSettings): { width: number; height: number } {
+  if (settings.aspect === 'custom') {
+    return { width: clampDimension(settings.customWidth ?? 1920), height: clampDimension(settings.customHeight ?? 1080) };
+  }
+  const ratios: Record<Exclude<AspectPreset, 'custom'>, [number, number]> = {
     '16:9': [16, 9],
     '9:16': [9, 16],
     '1:1': [1, 1],
@@ -68,11 +86,28 @@ export function frameSize(settings: { aspect: ProjectSettings['aspect']; resolut
   };
   const [rw, rh] = ratios[settings.aspect];
   const short = settings.resolution;
-  // Keep dimensions even (encoder friendly).
-  const even = (n: number) => Math.round(n / 2) * 2;
-  return rw >= rh
-    ? { width: even((short * rw) / rh), height: short }
-    : { width: short, height: even((short * rh) / rw) };
+  return rw >= rh ? { width: even((short * rw) / rh), height: even(short) } : { width: even(short), height: even((short * rh) / rw) };
+}
+
+/** Change aspect; switching to 'custom' starts from the current frame size. */
+export function withAspect(settings: ProjectSettings, aspect: AspectPreset): ProjectSettings {
+  if (aspect === 'custom' && settings.aspect !== 'custom') {
+    const f = frameSize(settings);
+    return { ...settings, aspect, customWidth: f.width, customHeight: f.height };
+  }
+  return { ...settings, aspect };
+}
+
+/**
+ * Output size for an export: the project frame scaled so its short edge is
+ * `shortEdge`, never larger than 2K (long edge ≤ 2560, short edge ≤ 1440).
+ */
+export function exportSize(settings: FrameSettings, shortEdge: number): { width: number; height: number } {
+  const f = frameSize(settings);
+  const short = Math.min(f.width, f.height);
+  const long = Math.max(f.width, f.height);
+  const k = Math.min(Math.min(shortEdge, MAX_SHORT_EDGE) / short, MAX_EDGE / long);
+  return { width: even(f.width * k), height: even(f.height * k) };
 }
 
 export function trackKindForAsset(asset: MediaAsset): TrackKind {

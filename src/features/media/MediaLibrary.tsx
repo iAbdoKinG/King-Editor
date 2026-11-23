@@ -95,7 +95,7 @@ const AssetRow = memo(function AssetRow({ asset, usage }: { asset: MediaAsset; u
           {asset.name}
         </div>
         <div className={`tnum truncate text-[11px] ${asset.status === 'error' ? 'text-danger' : 'text-muted'}`}>
-          {asset.status === 'error' ? T(asset.error ?? '') : asset.status === 'loading' ? T('Reading…') : meta}
+          {asset.status === 'error' ? T(asset.error ?? '') : asset.status === 'loading' ? T('Reading…') : <bdi dir="ltr">{meta}</bdi>}
         </div>
       </div>
       <button

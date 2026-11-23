@@ -145,13 +145,16 @@ export interface TextClip extends ClipBase {
 
 export type Clip = MediaClip | TextClip;
 
-export type AspectPreset = '16:9' | '9:16' | '1:1' | '4:5' | '4:3';
+export type AspectPreset = '16:9' | '9:16' | '1:1' | '4:5' | '4:3' | 'custom';
 
 export interface ProjectSettings {
   name: string;
   aspect: AspectPreset;
-  /** Short edge in pixels (720 / 1080). */
-  resolution: 720 | 1080;
+  /** Short edge in pixels (720 / 1080 / 1440) for preset aspects. */
+  resolution: 720 | 1080 | 1440;
+  /** Exact frame size when aspect is 'custom' (independent width and height). */
+  customWidth?: number;
+  customHeight?: number;
   fps: 24 | 25 | 30 | 60;
   background: string;
 }
