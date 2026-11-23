@@ -32,7 +32,8 @@ export const WaveformView = memo(function WaveformView({ assetId, srcIn, speed, 
     const ch = Math.max(1, Math.round(height));
     if (c.width !== cw) c.width = cw;
     if (c.height !== ch) c.height = ch;
-    const ctx = c.getContext('2d');
+    // CPU-backed canvas: avoids one GPU compositing layer per clip (hundreds on long timelines).
+    const ctx = c.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
     ctx.clearRect(0, 0, cw, ch);
     const secPerPx = (duration * speed) / cw;

@@ -19,7 +19,7 @@ import { resolveTransform } from '../timeline/animation';
 import { frameSize } from '../timeline/model';
 import type { Mix } from '../timeline/transitions';
 import { visibleLayersAt } from './compositor';
-import { filterString, vignetteGradient } from './filters';
+import { filterString, shadowFilter, vignetteGradient } from './filters';
 import { clipBox, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD, type ClipBox } from './geometry';
 import { useFontStore } from '../../features/fonts/fonts';
 import { isRtl } from '../../utils/text';
@@ -108,7 +108,8 @@ export class DomStage {
           const slot = this.pool.slotFor(clip.id);
           const el = slot?.el as HTMLVideoElement | undefined;
           // Show the element only once it has a frame (avoids flashing black).
-          if (!slot?.wrap || !slot.outer || !el || el.readyState < 2) return;
+          // Keep the last frame on screen while seeking (no flashing during drags and scrubs).
+          if (!slot?.wrap || !slot.outer || !el || (el.readyState < 2 && !slot.hasFrame)) return;
           els = slotEls.get(slot.outer) ?? { outer: slot.outer, wrap: slot.wrap };
           slotEls.set(slot.outer, els);
           inner = el;
@@ -128,6 +129,10 @@ export class DomStage {
       setStyle(wrap, 'transform', layerMatrix(k, W, H, mix, box));
       setStyle(wrap, 'opacity', `${Math.max(0, Math.min(1, alpha))}`);
       setStyle(wrap, 'filter', filterString(clip.effects, mix, 1));
+      // Pro effects: corner radius scales with the clip; shadow and blend work on the finished layer.
+      setStyle(wrap, 'borderRadius', `${Math.max(0, clip.effects.radius ?? 0)}px`);
+      setStyle(outer, 'filter', shadowFilter(clip.effects, k));
+      setStyle(outer, 'mixBlendMode', clip.effects.blend && clip.effects.blend !== 'normal' ? clip.effects.blend : 'normal');
       this.vignette(els, clip.effects.vignette ?? 0);
       shown.add(outer);
     });

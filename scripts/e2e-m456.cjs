@@ -68,6 +68,7 @@ async function pngDiff(page, a, b) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('dialog', (d) => d.accept());
   await page.goto('http://localhost:4173/?debug');
+  await page.evaluate(() => window.__KING__.useUIStore.getState().setMode('pro'));
   await page.setInputFiles('[data-testid=file-input]', [m('clipA.webm'), m('portrait.webm'), m('tone.ogg')]);
   await page.waitForFunction(() => Object.values(window.__KING__.useMediaStore.getState().assets).every((a) => a.status !== 'loading'));
   for (const n of ['clipA.webm', 'portrait.webm']) {
@@ -167,7 +168,7 @@ async function pngDiff(page, a, b) {
   await page.click('[data-testid=redo]');
 
   /* ---------- export ---------- */
-  await page.getByRole('button', { name: 'Export' }).first().click();
+  await page.getByRole('button', { name: 'Export', exact: true }).first().click();
   await page.waitForSelector('[data-testid=export-dialog]');
   await page.getByTestId('export-dialog').getByRole('radio', { name: '720p' }).click();
   await page.waitForFunction(() => !document.querySelector('[data-testid=export-start]')?.disabled, null, { timeout: 15000 });
@@ -199,7 +200,7 @@ async function pngDiff(page, a, b) {
 
   // cancel path
   await page.getByRole('button', { name: 'Close' }).last().click();
-  await page.getByRole('button', { name: 'Export' }).first().click();
+  await page.getByRole('button', { name: 'Export', exact: true }).first().click();
   await page.waitForFunction(() => !document.querySelector('[data-testid=export-start]')?.disabled, null, { timeout: 15000 });
   await page.click('[data-testid=export-start]');
   await page.waitForTimeout(1200);

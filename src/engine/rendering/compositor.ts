@@ -4,7 +4,7 @@
  * identical transforms, keyframes, effects and transitions.
  */
 import type { MediaAsset, Project, TextClip } from '../../types/project';
-import { filterString } from './filters';
+import { compositeOp, filterString, shadowFilter } from './filters';
 import { resolveTransform } from '../timeline/animation';
 import { frameSize } from '../timeline/model';
 import { trackLayersAt, type Layer } from '../timeline/transitions';
@@ -93,24 +93,63 @@ export function renderFrame(ctx: CanvasRenderingContext2D, opts: RenderOptions):
   if (canvasFilterSupported) ctx.filter = 'none';
 }
 
-function drawLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: RenderOptions, W: number, H: number, k: number): void {
+let layerBuf: HTMLCanvasElement | null = null;
+/** Reusable frame-sized buffer for layers that need post-compositing (drop shadow). */
+function layerBuffer(w: number, h: number): CanvasRenderingContext2D {
+  if (!layerBuf) layerBuf = document.createElement('canvas');
+  if (layerBuf.width !== w || layerBuf.height !== h) {
+    layerBuf.width = w;
+    layerBuf.height = h;
+  }
+  const c = layerBuf.getContext('2d')!;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, w, h);
+  return c;
+}
+
+/** Transition clip region, in frame space. */
+function applyMixClip(ctx: CanvasRenderingContext2D, mix: Layer['mix'], W: number, H: number, k: number): void {
+  if (!mix.clip) return;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.beginPath();
+  if (mix.clip.kind === 'inset') {
+    const c = mix.clip;
+    ctx.rect(W * c.left, H * c.top, Math.max(0, W * (1 - c.left - c.right)), Math.max(0, H * (1 - c.top - c.bottom)));
+  } else ctx.arc(W / 2, H / 2, (mix.clip.r * Math.hypot(W, H)) / 2, 0, Math.PI * 2);
+  ctx.clip();
+}
+
+function drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, opts: RenderOptions, W: number, H: number, k: number): void {
+  const { clip, mix } = layer;
+  const e = clip.effects;
+  // Drop shadows are applied to the finished layer (like the GPU preview), so paint into a buffer first.
+  if (e.shadow && canvasFilterSupported) {
+    const buf = layerBuffer(ctx.canvas.width, ctx.canvas.height);
+    buf.save();
+    const painted = paintLayer(buf, layer, opts, W, H, k);
+    buf.restore();
+    if (!painted) return;
+    applyMixClip(ctx, mix, W, H, k);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = compositeOp(e.blend);
+    ctx.filter = shadowFilter(e, k);
+    ctx.drawImage(buf.canvas, 0, 0);
+    return;
+  }
+  applyMixClip(ctx, mix, W, H, k);
+  ctx.globalCompositeOperation = compositeOp(e.blend);
+  paintLayer(ctx, layer, opts, W, H, k);
+}
+
+/** Paint one layer with its transforms, filters, corner radius and vignette. Returns false if nothing was drawn. */
+function paintLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: RenderOptions, W: number, H: number, k: number): boolean {
   const { assets, t, source } = opts;
   const tr = resolveTransform(clip, t - clip.start);
   const box = clipBox(clip, assets, W, H, tr);
-  if (!box) return;
+  if (!box) return false;
   const alpha = Math.min(1, tr.opacity) * mix.alpha;
-  if (alpha <= 0.001) return;
+  if (alpha <= 0.001) return false;
 
-  // Transition clip region, in frame space.
-  if (mix.clip) {
-    ctx.setTransform(k, 0, 0, k, 0, 0);
-    ctx.beginPath();
-    if (mix.clip.kind === 'inset') {
-      const c = mix.clip;
-      ctx.rect(W * c.left, H * c.top, Math.max(0, W * (1 - c.left - c.right)), Math.max(0, H * (1 - c.top - c.bottom)));
-    } else ctx.arc(W / 2, H / 2, (mix.clip.r * Math.hypot(W, H)) / 2, 0, Math.PI * 2);
-    ctx.clip();
-  }
   // Transition transform around the frame centre, then the clip transform.
   ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.translate(W / 2 + mix.dx, H / 2 + mix.dy);
@@ -120,9 +159,16 @@ function drawLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: Re
   ctx.rotate(box.rot);
   ctx.scale(box.sx, box.sy);
   ctx.globalAlpha = alpha;
-  if (canvasFilterSupported) ctx.filter = filterString(clip.effects, mix, k * mix.scale * Math.abs(box.sx));
   const x0 = -box.w * box.ax;
   const y0 = -box.h * box.ay;
+  const r = clip.effects.radius ?? 0;
+  if (r > 0) {
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(x0, y0, box.w, box.h, Math.min(r, box.w / 2, box.h / 2));
+    else ctx.rect(x0, y0, box.w, box.h);
+    ctx.clip();
+  }
+  if (canvasFilterSupported) ctx.filter = filterString(clip.effects, mix, k * mix.scale * Math.abs(box.sx));
 
   if (clip.type === 'text') drawText(ctx, clip, x0, y0);
   else {
@@ -136,7 +182,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: Re
         frame = imageFrame(img, w, h);
       }
     } else frame = source.getFrame(clip.id);
-    if (!frame) return;
+    if (!frame) return false;
     const c = tr.crop;
     try {
       frame.draw(
@@ -151,7 +197,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: Re
         box.h,
       );
     } catch {
-      return; /* frame not decodable yet */
+      return false; /* frame not decodable yet */
     }
   }
   const v = clip.effects.vignette ?? 0;
@@ -169,6 +215,7 @@ function drawLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: Re
     ctx.fillStyle = g;
     ctx.fillRect(-1, -1, 2, 2);
   }
+  return true;
 }
 
 function drawText(ctx: CanvasRenderingContext2D, c: TextClip, x0: number, y0: number): void {

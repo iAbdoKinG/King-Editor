@@ -24,6 +24,8 @@ export interface Slot {
   wrap: HTMLDivElement | null;
   /** Frame-sized clipper around `wrap` (transition clip regions). */
   outer: HTMLDivElement | null;
+  /** True once the current source has shown a frame; stays true during seeks so the last frame remains visible. */
+  hasFrame: boolean;
   clipId: string | null;
   url: string | null;
   seeking: boolean;
@@ -95,7 +97,7 @@ export class MediaPool {
       el.removeAttribute('height');
       wrap.appendChild(el);
     }
-    const slot: Slot = { kind, el, wrap, outer, clipId: null, url: null, seeking: false, pendingSeek: null, playPending: false, lastUsed: 0 };
+    const slot: Slot = { kind, el, wrap, outer, hasFrame: false, clipId: null, url: null, seeking: false, pendingSeek: null, playPending: false, lastUsed: 0 };
     el.addEventListener('seeked', () => {
       slot.seeking = false;
       if (slot.pendingSeek !== null) {
@@ -105,7 +107,12 @@ export class MediaPool {
       }
       this.onFrame();
     });
-    el.addEventListener('loadeddata', () => this.onFrame());
+    const markFrame = () => {
+      if (el.readyState >= 2) slot.hasFrame = true;
+      this.onFrame();
+    };
+    el.addEventListener('loadeddata', markFrame);
+    el.addEventListener('seeked', markFrame);
     el.addEventListener('canplay', () => this.onFrame());
     this.container.appendChild(outer ?? el);
     return slot;
@@ -167,8 +174,10 @@ export class MediaPool {
   }
 
   getFrame(clipId: string): Frame | null {
-    const el = this.byClip.get(clipId)?.el;
-    if (!(el instanceof HTMLVideoElement) || el.readyState < 2 || !el.videoWidth) return null;
+    const slot = this.byClip.get(clipId);
+    const el = slot?.el;
+    // During a seek readyState drops below 2, but the element still holds the previous frame.
+    if (!(el instanceof HTMLVideoElement) || !el.videoWidth || (el.readyState < 2 && !slot!.hasFrame)) return null;
     return imageFrame(el, el.videoWidth, el.videoHeight);
   }
 
@@ -198,6 +207,7 @@ export class MediaPool {
       slot.el.load(); // frees the decoder
     }
     slot.url = null;
+    slot.hasFrame = false;
     slot.seeking = false;
     slot.pendingSeek = null;
     slot.playPending = false;
@@ -211,6 +221,7 @@ export class MediaPool {
       slot.url = asset.url;
       slot.seeking = false;
       slot.pendingSeek = null;
+      slot.hasFrame = false;
       slot.el.src = asset.url;
       slot.el.currentTime = clip.in;
     }

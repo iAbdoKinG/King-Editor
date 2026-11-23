@@ -93,6 +93,7 @@ async function canvasStats(page) {
   page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
   page.on('dialog', (d) => d.accept());
   await page.goto(URL_);
+  await page.evaluate(() => window.__KING__.useUIStore.getState().setMode('pro'));
   await page.waitForSelector('[data-testid=preview-stage]');
 
   await page.setInputFiles('[data-testid=file-input]', [m('clipA.webm'), m('portrait.webm'), m('tone.ogg'), m('still.png'), m('notes.txt')]);

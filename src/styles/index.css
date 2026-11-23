@@ -2,20 +2,20 @@
 @import '@fontsource-variable/inter/index.css';
 
 @theme {
-  --color-bg: #15191d;
-  --color-surface: #22282e;
-  --color-elevated: #2c343b;
-  --color-accent: #91c1c5;
-  --color-accent-strong: #a9d3d6;
-  --color-text: #f2f4f5;
-  --color-muted: #9caab1;
-  --color-line: #39434a;
+  --color-bg: #0e1014;
+  --color-surface: #161920;
+  --color-elevated: #1f232c;
+  --color-accent: #8b6cff;
+  --color-accent-strong: #a48cff;
+  --color-text: #f1f2f6;
+  --color-muted: #8d94a6;
+  --color-line: #2a2f3a;
   --color-danger: #e0817a;
-  --color-video: #4f7477;
-  --color-audio: #5a6f52;
-  --color-text-clip: #7a6a52;
-  --color-stage: #0f1215;
-  --color-on-accent: #111417;
+  --color-video: #4a3f8c;
+  --color-audio: #255e54;
+  --color-text-clip: #7e4634;
+  --color-stage: #090a0d;
+  --color-on-accent: #ffffff;
   --font-sans: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }

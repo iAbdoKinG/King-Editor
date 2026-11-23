@@ -23,7 +23,7 @@ async function launch() {
     env: { ...process.env, KING_E2E_DIR: workDir },
   });
   const page = await app.firstWindow();
-  await page.waitForSelector('[data-testid=preview-stage]', { timeout: 30000 });
+  await page.waitForSelector('[data-testid=home]', { timeout: 30000 });
   return { app, page };
 }
 
@@ -52,6 +52,8 @@ async function launch() {
   const blocked = await page.evaluate(() => fetch('media://local/' + encodeURIComponent('/etc/passwd')).then((r) => r.status, () => 'error'));
   check('media:// refuses files the user did not pick', blocked === 403, String(blocked));
 
+  await page.getByTestId('new-16:9').click();
+  await page.waitForSelector('[data-testid=preview-stage]');
   await page.setInputFiles('[data-testid=file-input]', [path.join(mediaDir, 'clipA.webm'), path.join(mediaDir, 'speech.ogg')]);
   await page.waitForFunction(() => document.querySelectorAll('[data-testid=asset-row]').length === 2);
   await page.waitForTimeout(1500);
@@ -64,10 +66,15 @@ async function launch() {
   await page.locator('body').press('m');
   await page.locator('[aria-label="Project title"]').fill('Desktop Test');
   await page.locator('[aria-label="Project title"]').press('Enter');
+  await page.waitForTimeout(1600);
+  await page.waitForSelector('[data-testid=save-status]:has-text("Saved")');
+  const lib = path.join(workDir, 'library');
+  const libDirs = fs.existsSync(lib) ? fs.readdirSync(lib) : [];
+  check('project autosaved to the library folder', libDirs.length === 1 && fs.existsSync(path.join(lib, libDirs[0], 'project.qissa')), libDirs.join(','));
   await page.getByTestId('save-project').click();
   await page.waitForTimeout(800);
-  const saved = fs.readdirSync(workDir).filter((f) => f.endsWith('.kingproj'));
-  check('project saved to disk (.kingproj)', saved.length === 1, saved.join(','));
+  const saved = fs.readdirSync(workDir).filter((f) => f.endsWith('.qissa'));
+  check('project exported to a .qissa file', saved.length === 1, saved.join(','));
   const proj = JSON.parse(fs.readFileSync(path.join(workDir, saved[0]), 'utf8'));
   check('project references media by absolute path (no media copied)', proj.assets.length === 2 && proj.assets.every((a) => path.isAbsolute(a.path)) && fs.statSync(path.join(workDir, saved[0])).size < 50000, proj.assets.map((a) => path.basename(a.path)).join(','));
   await app.close();
@@ -76,7 +83,10 @@ async function launch() {
   ({ app, page } = await launch());
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('dialog', (d) => d.accept());
-  await page.getByTestId('open-project').click();
+  await page.waitForSelector('[data-testid=project-card]', { timeout: 15000 });
+  const cardText = await page.locator('[data-testid=project-card]').first().innerText();
+  check('home lists the saved project after restart', cardText.includes('Desktop Test'), cardText.replace(/\n/g, ' '));
+  await page.locator('[data-testid=project-card] button').first().click();
   await page.waitForFunction(() => document.querySelectorAll('[data-clip-id]').length >= 2, null, { timeout: 15000 });
   await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=asset-row]')].every((r) => !r.textContent.includes('…')), null, { timeout: 20000 }).catch(() => {});
   const title = await page.locator('[aria-label="Project title"]').inputValue();
@@ -95,7 +105,7 @@ async function launch() {
   await page.screenshot({ path: shot });
 
   /* ---------- 4K export from streamed media ---------- */
-  await page.getByRole('button', { name: 'Export' }).first().click();
+  await page.getByRole('button', { name: 'Export', exact: true }).first().click();
   const dlg = page.getByTestId('export-dialog');
   const has2k = await dlg.getByRole('radio', { name: '2K' }).count();
   check('2K export option (maximum)', has2k === 1 && (await dlg.getByRole('radio', { name: '4K' }).count()) === 0);

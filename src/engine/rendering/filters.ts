@@ -14,9 +14,25 @@ export function filterString(e: Effects, mix: Pick<Mix, 'blur' | 'brightness'> |
   if (e.hue) parts.push(`hue-rotate(${e.hue}deg)`);
   if (e.sepia) parts.push(`sepia(${e.sepia}%)`);
   if (e.grayscale) parts.push(`grayscale(${e.grayscale}%)`);
+  if (e.invert) parts.push(`invert(${e.invert}%)`);
   const blur = e.blur + (mix?.blur ?? 0);
   if (blur > 0) parts.push(`blur(${(blur * blurScale).toFixed(2)}px)`);
   return parts.length ? parts.join(' ') : 'none';
+}
+
+/** Frame-space drop shadow (same units in preview and export: frame pixels × scale). */
+export function shadowFilter(e: Effects, scale: number): string {
+  if (!e.shadow) return 'none';
+  const a = Math.min(1, Math.max(0, e.shadow / 100));
+  const hex = /^#[0-9a-fA-F]{6}$/.test(e.shadowColor ?? '') ? e.shadowColor! : '#000000';
+  const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',');
+  const f = (n: number | undefined) => ((n ?? 0) * scale).toFixed(2);
+  return `drop-shadow(${f(e.shadowX)}px ${f(e.shadowY)}px ${f(e.shadowBlur)}px rgba(${rgb},${a.toFixed(3)}))`;
+}
+
+/** Canvas composite operation for a blend mode. */
+export function compositeOp(blend: Effects['blend']): GlobalCompositeOperation {
+  return !blend || blend === 'normal' ? 'source-over' : blend;
 }
 
 /** Radial vignette as a CSS gradient (amount 0–100). */

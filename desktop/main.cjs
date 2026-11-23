@@ -1,11 +1,12 @@
 /**
- * KING EDITOR — desktop (Windows) main process.
+ * Qissa — desktop (Windows) main process.
  *
  * - Serves the bundled web app from app:// (works fully offline).
  * - Streams local media from media:// with HTTP Range support, so large videos
  *   are never read fully into memory. Only files the user picked (or that a
  *   project they opened references) are served.
- * - Native Save/Open dialogs for .kingproj project files.
+ * - Native Save/Open dialogs for .qissa project files (.kingproj still opens).
+ * - Project library in Documents/Qissa/Projects (autosaved by the app).
  * - Hardened window: context isolation, sandbox, no Node in the page,
  *   navigation locked to the app.
  */
@@ -101,7 +102,33 @@ async function serveMedia(request) {
 }
 
 let win = null;
-let pendingOpen = process.argv.find((a) => a.toLowerCase().endsWith('.kingproj')) ?? null;
+const PROJECT_EXT = /\.(qissa|kingproj)$/i;
+let pendingOpen = process.argv.find((a) => PROJECT_EXT.test(a)) ?? null;
+
+/* ----------------------------- project library ----------------------------- */
+
+function libraryRoot() {
+  const root = E2E_DIR ? path.join(E2E_DIR, 'library') : path.join(app.getPath('documents'), 'Qissa', 'Projects');
+  fs.mkdirSync(root, { recursive: true });
+  return root;
+}
+const validId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id);
+function projectDir(id) {
+  if (!validId(id)) throw new Error('invalid id');
+  return path.join(libraryRoot(), id);
+}
+async function writeAtomic(file, data) {
+  const tmp = `${file}.tmp`;
+  await fsp.writeFile(tmp, data);
+  await fsp.rename(tmp, file);
+}
+function registerProjectMedia(text) {
+  try {
+    for (const a of JSON.parse(text)?.assets ?? []) if (typeof a?.path === 'string' && a.path) allowedMedia.add(norm(a.path));
+  } catch {
+    /* ignore */
+  }
+}
 
 async function readProject(file) {
   const text = await fsp.readFile(file, 'utf8');
@@ -117,8 +144,8 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    backgroundColor: '#15191D',
-    title: 'KING EDITOR',
+    backgroundColor: '#0E1014',
+    title: 'Qissa',
     show: false,
     autoHideMenuBar: true,
     icon: path.join(APP_DIR, 'icons', 'icon-512.png'),
@@ -152,7 +179,7 @@ function createWindow() {
       buttons: ar ? ['إغلاق بدون حفظ', 'إلغاء'] : ['Close without saving', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
-      title: 'KING EDITOR',
+      title: 'Qissa',
       message: ar ? 'لديك عمل غير محفوظ. هل تريد الإغلاق؟' : 'You have unsaved work. Close anyway?',
     });
     if (choice === 0) e.preventDefault();
@@ -184,12 +211,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle('project:save', async (_e, { text, suggestedName, path: current }) => {
     if (typeof text !== 'string') return null;
-    let target = typeof current === 'string' && current.toLowerCase().endsWith('.kingproj') ? current : null;
-    if (!target && E2E_DIR) target = path.join(E2E_DIR, `${String(suggestedName || 'Project').replace(/[\\/:*?"<>|]+/g, '')}.kingproj`);
+    let target = typeof current === 'string' && PROJECT_EXT.test(current) ? current : null;
+    if (!target && E2E_DIR) target = path.join(E2E_DIR, `${String(suggestedName || 'Project').replace(/[\\/:*?"<>|]+/g, '')}.qissa`);
     if (!target) {
       const r = await dialog.showSaveDialog(win, {
-        defaultPath: `${String(suggestedName || 'Project').replace(/[\\/:*?"<>|]+/g, '').slice(0, 80) || 'Project'}.kingproj`,
-        filters: [{ name: 'KING EDITOR Project', extensions: ['kingproj'] }],
+        defaultPath: `${String(suggestedName || 'Project').replace(/[\\/:*?"<>|]+/g, '').slice(0, 80) || 'Project'}.qissa`,
+        filters: [{ name: 'Qissa Project', extensions: ['qissa'] }],
       });
       if (r.canceled || !r.filePath) return null;
       target = r.filePath;
@@ -203,12 +230,12 @@ app.whenReady().then(() => {
     pendingOpen = null;
     if (file) return readProject(file).catch(() => null);
     if (E2E_DIR) {
-      const f = fs.readdirSync(E2E_DIR).find((n) => n.endsWith('.kingproj'));
+      const f = fs.readdirSync(E2E_DIR).find((n) => PROJECT_EXT.test(n));
       return f ? readProject(path.join(E2E_DIR, f)) : null;
     }
     const r = await dialog.showOpenDialog(win, {
       properties: ['openFile'],
-      filters: [{ name: 'KING EDITOR Project', extensions: ['kingproj'] }],
+      filters: [{ name: 'Qissa Project', extensions: ['qissa', 'kingproj'] }],
     });
     if (r.canceled || !r.filePaths[0]) return null;
     return readProject(r.filePaths[0]);
@@ -216,16 +243,82 @@ app.whenReady().then(() => {
 
   ipcMain.handle('project:pending', () => !!pendingOpen);
 
+  ipcMain.handle('library:list', async () => {
+    const root = libraryRoot();
+    const out = [];
+    for (const id of await fsp.readdir(root)) {
+      if (!validId(id)) continue;
+      try {
+        out.push(JSON.parse(await fsp.readFile(path.join(root, id, 'meta.json'), 'utf8')));
+      } catch {
+        /* skip broken entries */
+      }
+    }
+    return out.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  });
+
+  ipcMain.handle('library:save', async (_e, meta, text) => {
+    if (!meta || !validId(meta.id) || typeof text !== 'string' || text.length > 50 * 1024 * 1024) throw new Error('invalid');
+    const dir = projectDir(meta.id);
+    await fsp.mkdir(dir, { recursive: true });
+    await writeAtomic(path.join(dir, 'project.qissa'), text);
+    await writeAtomic(path.join(dir, 'meta.json'), JSON.stringify({ ...meta, id: meta.id }));
+  });
+
+  ipcMain.handle('library:load', async (_e, id) => {
+    const dir = projectDir(id);
+    try {
+      const text = await fsp.readFile(path.join(dir, 'project.qissa'), 'utf8');
+      const meta = JSON.parse(await fsp.readFile(path.join(dir, 'meta.json'), 'utf8'));
+      registerProjectMedia(text);
+      return { meta, text };
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('library:remove', async (_e, id) => {
+    const dir = projectDir(id);
+    if (!fs.existsSync(dir)) return;
+    // Recycle Bin when available, so a deleted project can be recovered.
+    await shell.trashItem(dir).catch(() => fsp.rm(dir, { recursive: true, force: true }));
+  });
+
+  ipcMain.handle('library:rename', async (_e, id, name) => {
+    const dir = projectDir(id);
+    const metaFile = path.join(dir, 'meta.json');
+    const projFile = path.join(dir, 'project.qissa');
+    const clean = String(name ?? '').slice(0, 120);
+    const meta = JSON.parse(await fsp.readFile(metaFile, 'utf8'));
+    await writeAtomic(metaFile, JSON.stringify({ ...meta, name: clean, updatedAt: Date.now() }));
+    const proj = JSON.parse(await fsp.readFile(projFile, 'utf8'));
+    proj.project.settings.name = clean;
+    await writeAtomic(projFile, JSON.stringify(proj));
+  });
+
+  ipcMain.handle('library:duplicate', async (_e, id, newId, name) => {
+    const src = projectDir(id);
+    const dst = projectDir(newId);
+    await fsp.cp(src, dst, { recursive: true });
+    const now = Date.now();
+    const clean = String(name ?? '').slice(0, 120);
+    const meta = JSON.parse(await fsp.readFile(path.join(dst, 'meta.json'), 'utf8'));
+    await writeAtomic(path.join(dst, 'meta.json'), JSON.stringify({ ...meta, id: newId, name: clean, createdAt: now, updatedAt: now }));
+    const proj = JSON.parse(await fsp.readFile(path.join(dst, 'project.qissa'), 'utf8'));
+    proj.project.settings.name = clean;
+    await writeAtomic(path.join(dst, 'project.qissa'), JSON.stringify(proj));
+  });
+
   createWindow();
 });
 
 app.on('window-all-closed', () => app.quit());
 
-// A second launch (e.g. double-clicking a .kingproj) focuses the running window.
+// A second launch (e.g. double-clicking a .qissa file) focuses the running window.
 if (!app.requestSingleInstanceLock()) app.quit();
 else
   app.on('second-instance', (_e, argv) => {
-    const proj = argv.find((a) => a.toLowerCase().endsWith('.kingproj'));
+    const proj = argv.find((a) => PROJECT_EXT.test(a));
     if (proj) {
       pendingOpen = proj;
       win?.webContents.send('project:open-request');

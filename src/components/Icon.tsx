@@ -41,6 +41,8 @@ const P: Record<string, string> = {
   flipV: 'M3 12h18M7 8l5-5 5 5zM7 16l5 5 5-5z',
   save: 'M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7',
   windows: 'M3 5.5 10.5 4.5v7H3zM12 4.3 21 3v8.5h-9zM3 12.5h7.5v7L3 18.5zM12 12.5h9V21l-9-1.3z',
+  keyboard: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M19 10h.01M7 14h10',
+  home: 'M3 11 12 4l9 7M5 10v10h5v-6h4v6h5V10',
   layers: 'M12 3 2 8l10 5 10-5zM2 13l10 5 10-5',
   ripple: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M21 17h-3',
 };

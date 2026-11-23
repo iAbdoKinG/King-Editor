@@ -8,6 +8,9 @@ import { Toasts } from '../components/Toasts';
 import { ThemeDialog } from '../components/ThemeDialog';
 import { AdvisorBanner } from '../features/advisor/AdvisorBanner';
 import { DownloadDialog } from '../components/DownloadDialog';
+import { ShortcutsDialog } from '../features/shortcuts/ShortcutsDialog';
+import { HomeScreen } from '../features/library/HomeScreen';
+import { useSession } from '../features/library/session';
 import { PresetLinkImport, PresetsDialog } from '../features/presets/PresetsDialog';
 import { ExportDialog } from '../features/export/ExportDialog';
 import { Inspector } from '../features/inspector/Inspector';
@@ -160,9 +163,10 @@ export function App() {
     if (mode === 'wide' && window.innerWidth < 1100) useUIStore.getState().set({ libraryOpen: false });
   }, [mode]);
 
+  const view = useSession((s) => s.view);
   return (
     <>
-      {mode === 'wide' ? <WideLayout /> : <CompactLayout landscape={landscape} />}
+      {view === 'home' ? <HomeScreen /> : mode === 'wide' ? <WideLayout /> : <CompactLayout landscape={landscape} />}
       <ClipContextMenu compact={mode === 'compact'} />
       <ExportDialog />
       <ThemeDialog />
@@ -170,6 +174,7 @@ export function App() {
       <PresetLinkImport />
       <AdvisorBanner />
       <DownloadDialog />
+      <ShortcutsDialog />
       <Toasts />
     </>
   );

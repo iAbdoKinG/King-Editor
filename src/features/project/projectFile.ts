@@ -1,5 +1,5 @@
 /**
- * .kingproj project files (desktop app). The file stores the timeline and
+ * .qissa project files (older .kingproj files are compatible). The file stores the timeline and
  * the *paths* of the media, never the media itself. Loading validates and
  * normalizes every field, so a damaged or hand-edited file cannot put the
  * editor into an invalid state.
@@ -26,15 +26,20 @@ interface ProjectFileV1 {
   assets: ProjectFileAsset[];
 }
 
-export function serializeProject(project: Project, assets: Record<string, MediaAsset>): { text: string; unsaved: string[] } {
+/**
+ * Serialize a project. With `requirePaths` (portable project files) media
+ * without a disk path is skipped and reported; the in-app library keeps every
+ * asset (its media is stored separately).
+ */
+export function serializeProject(project: Project, assets: Record<string, MediaAsset>, requirePaths = true): { text: string; unsaved: string[] } {
   const list: ProjectFileAsset[] = [];
   const unsaved: string[] = [];
   for (const a of Object.values(assets)) {
-    if (!a.path) {
+    if (!a.path && requirePaths) {
       unsaved.push(a.name);
       continue;
     }
-    list.push({ id: a.id, kind: a.kind, name: a.name, size: a.size, mime: a.mime, path: a.path });
+    list.push({ id: a.id, kind: a.kind, name: a.name, size: a.size, mime: a.mime, path: a.path ?? '' });
   }
   const file: ProjectFileV1 = { app: 'king-editor', kind: 'project', v: 1, savedAt: new Date().toISOString(), project, assets: list };
   return { text: JSON.stringify(file), unsaved };
@@ -109,16 +114,16 @@ export function parseProjectFile(text: string): ParsedProject {
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error('This file is not a KING EDITOR project.');
+    throw new Error('This file is not a project file.');
   }
-  if (!isObj(raw) || raw.app !== 'king-editor' || raw.kind !== 'project' || !isObj(raw.project)) throw new Error('This file is not a KING EDITOR project.');
+  if (!isObj(raw) || raw.app !== 'king-editor' || raw.kind !== 'project' || !isObj(raw.project)) throw new Error('This file is not a project file.');
   const p = raw.project;
 
   const assets: ProjectFileAsset[] = [];
   for (const a of Array.isArray(raw.assets) ? raw.assets.slice(0, 5000) : []) {
     if (!isObj(a)) continue;
     const aid = id(a.id);
-    if (!aid || typeof a.path !== 'string' || !a.path) continue;
+    if (!aid || typeof a.path !== 'string') continue;
     assets.push({
       id: aid,
       kind: oneOf(a.kind, ['video', 'audio', 'image'] as const, 'video'),

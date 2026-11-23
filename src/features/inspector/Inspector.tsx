@@ -22,6 +22,7 @@ import { TRANSITION_TYPES, maxTransitionDuration, prevAdjacent } from '../../eng
 import { usePlayheadTime } from '../../hooks/usePlayheadTime';
 import { LOOKS, lookEffects } from './looks';
 import { savePreset } from '../presets/PresetsDialog';
+import { BLEND_MODES } from '../presets/presets';
 import { filterString } from '../../engine/rendering/filters';
 import { ANIM_PRESETS, applyAnimPreset } from '../../engine/timeline/animationPresets';
 import { boxCorners, clipBox } from '../../engine/rendering/geometry';
@@ -65,6 +66,68 @@ function ResetButton({ onClick, label }: { onClick: () => void; label: string })
   );
 }
 
+function useIsPro(): boolean {
+  return useUIStore((s) => s.mode) === 'pro';
+}
+
+const BLEND_LABELS: Record<string, string> = {
+  normal: 'Normal',
+  multiply: 'Multiply',
+  screen: 'Screen',
+  overlay: 'Overlay',
+  darken: 'Darken',
+  lighten: 'Lighten',
+  'color-dodge': 'Color dodge',
+  'color-burn': 'Color burn',
+  'hard-light': 'Hard light',
+  'soft-light': 'Soft light',
+  difference: 'Difference',
+  exclusion: 'Exclusion',
+};
+
+/** Pro-only effects: blend modes, drop shadow, rounded corners, invert. */
+function ProEffectsSection({ clip }: { clip: Clip }) {
+  const patch = usePatch(clip.id);
+  const e = { ...defaultEffects(), ...clip.effects };
+  const set = (p: Partial<Clip['effects']>, commit: boolean) => patch((c) => ({ ...c, effects: { ...defaultEffects(), ...c.effects, ...p } }) as Clip, commit);
+  const off = !canvasFilterSupported;
+  return (
+    <Section title={T('Pro effects')}>
+      <Row label={T('Blend')}>
+        <select className="field w-full" aria-label={T('Blend mode')} value={e.blend} onChange={(ev) => set({ blend: ev.target.value as Clip['effects']['blend'] }, true)}>
+          {BLEND_MODES.map((b) => (
+            <option key={b} value={b}>
+              {T(BLEND_LABELS[b])}
+            </option>
+          ))}
+        </select>
+      </Row>
+      <SliderField label={T('Corners px')} value={e.radius ?? 0} min={0} max={400} step={1} onChange={(v, c) => set({ radius: v }, c)} />
+      <SliderField disabled={off} label={T('Invert')} value={e.invert ?? 0} min={0} max={100} onChange={(v, c) => set({ invert: v }, c)} />
+      <Row label={T('Shadow')}>
+        <Toggle label={T('Drop shadow')} checked={(e.shadow ?? 0) > 0} onChange={(on) => set({ shadow: on ? 60 : 0 }, true)} />
+        {(e.shadow ?? 0) > 0 && (
+          <input
+            type="color"
+            className="h-8 w-12 rounded border border-line bg-transparent"
+            aria-label={T('Shadow color')}
+            value={e.shadowColor ?? '#000000'}
+            onChange={(ev) => set({ shadowColor: ev.target.value }, true)}
+          />
+        )}
+      </Row>
+      {(e.shadow ?? 0) > 0 && (
+        <>
+          <SliderField disabled={off} label={T('Shadow %')} value={e.shadow ?? 0} min={1} max={100} onChange={(v, c) => set({ shadow: v }, c)} />
+          <SliderField disabled={off} label={T('Offset X')} value={e.shadowX ?? 0} min={-200} max={200} onChange={(v, c) => set({ shadowX: v }, c)} />
+          <SliderField disabled={off} label={T('Offset Y')} value={e.shadowY ?? 0} min={-200} max={200} onChange={(v, c) => set({ shadowY: v }, c)} />
+          <SliderField disabled={off} label={T('Softness')} value={e.shadowBlur ?? 0} min={0} max={150} onChange={(v, c) => set({ shadowBlur: v }, c)} />
+        </>
+      )}
+    </Section>
+  );
+}
+
 function useClipTime(clip: Clip) {
   const t = usePlayheadTime();
   const inside = t >= clip.start && t < clip.start + clip.duration;
@@ -73,6 +136,7 @@ function useClipTime(clip: Clip) {
 }
 
 function TransformSection({ clip }: { clip: Clip }) {
+  const pro = useIsPro();
   const patch = usePatch(clip.id);
   const base = clip.transform;
   const { lt, inside } = useClipTime(clip);
@@ -101,8 +165,8 @@ function TransformSection({ clip }: { clip: Clip }) {
       }
     >
       <TransformTools clip={clip} lt={lt} />
-      <SliderField label={T("Position X")} value={tr.x} min={-W} max={W} step={1} keyframe={kf('x')} onChange={(v, c) => anim('x', v, c)} />
-      <SliderField label={T("Position Y")} value={tr.y} min={-H} max={H} step={1} keyframe={kf('y')} onChange={(v, c) => anim('y', v, c)} />
+      <SliderField label={T("Position X")} value={tr.x} min={-W} max={W} step={1} keyframe={pro ? kf('x') : undefined} onChange={(v, c) => anim('x', v, c)} />
+      <SliderField label={T("Position Y")} value={tr.y} min={-H} max={H} step={1} keyframe={pro ? kf('y') : undefined} onChange={(v, c) => anim('y', v, c)} />
       {uniform ? (
         <SliderField
           label={T("Scale %")}
@@ -112,7 +176,7 @@ function TransformSection({ clip }: { clip: Clip }) {
           step={0.01}
           display={pct}
           parse={fromPct}
-          keyframe={kf('scale')}
+          keyframe={pro ? kf('scale') : undefined}
           onChange={(v, c) => anim('scale', v, c)}
         />
       ) : (
@@ -133,10 +197,10 @@ function TransformSection({ clip }: { clip: Clip }) {
           />
         </Row>
       )}
-      <SliderField label={T("Rotation °")} value={tr.rotation} min={-180} max={180} step={0.5} keyframe={kf('rotation')} onChange={(v, c) => anim('rotation', v, c)} />
-      <SliderField label={T("Opacity %")} value={tr.opacity} min={0} max={1} step={0.01} display={pct} parse={fromPct} keyframe={kf('opacity')} onChange={(v, c) => anim('opacity', v, c)} />
-      <SliderField label={T("Anchor X %")} value={base.anchorX} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorX: v }, c)} />
-      <SliderField label={T("Anchor Y %")} value={base.anchorY} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorY: v }, c)} />
+      <SliderField label={T("Rotation °")} value={tr.rotation} min={-180} max={180} step={0.5} keyframe={pro ? kf('rotation') : undefined} onChange={(v, c) => anim('rotation', v, c)} />
+      <SliderField label={T("Opacity %")} value={tr.opacity} min={0} max={1} step={0.01} display={pct} parse={fromPct} keyframe={pro ? kf('opacity') : undefined} onChange={(v, c) => anim('opacity', v, c)} />
+      {pro && <SliderField label={T("Anchor X %")} value={base.anchorX} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorX: v }, c)} />}
+      {pro && <SliderField label={T("Anchor Y %")} value={base.anchorY} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ anchorY: v }, c)} />}
       {!inside && <p className="text-[11px] leading-snug text-muted">{T("Move the playhead over this clip to add keyframes.")}</p>}
     </Section>
   );
@@ -244,16 +308,23 @@ function QuickAnimations({ clip }: { clip: Clip }) {
 }
 
 function AnimationSection({ clip }: { clip: Clip }) {
+  const pro = useIsPro();
   const patch = usePatch(clip.id);
   const { lt } = useClipTime(clip);
   const times = keyframeTimes(clip);
-  if (!times.length)
+  if (!times.length || !pro)
     return (
       <Section title={T("Animation")}>
         <QuickAnimations clip={clip} />
-        <p className="text-[11px] leading-snug text-muted">
-          {T('Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at another time to animate.')}
-        </p>
+        {pro ? (
+          <p className="text-[11px] leading-snug text-muted">
+            {T('Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at another time to animate.')}
+          </p>
+        ) : times.length ? (
+          <button className="text-[12px] text-danger" onClick={() => patch((c) => clearAnimation(c))}>
+            {T('Remove all keyframes')}
+          </button>
+        ) : null}
       </Section>
     );
   const atKf = times.find((t) => Math.abs(t - lt) < KF_EPS);
@@ -365,7 +436,7 @@ function TransitionInspector({ clipId }: { clipId: string }) {
             />
           </Row>
         )}
-        <Row label={T("Easing")}>
+        {useIsPro() && <Row label={T("Easing")}>
           <select className="field w-full" aria-label={T("Transition easing")} value={tr.easing} onChange={(e) => set({ easing: e.target.value as Easing })}>
             {EASINGS.map((e) => (
               <option key={e.value} value={e.value}>
@@ -373,7 +444,7 @@ function TransitionInspector({ clipId }: { clipId: string }) {
               </option>
             ))}
           </select>
-        </Row>
+        </Row>}
         <button className="mt-1 text-[12px] text-danger" onClick={() => removeTransition(clipId)}>
           {T('Remove transition (cut)')}
         </button>
@@ -410,6 +481,7 @@ function CropSection({ clip }: { clip: MediaClip }) {
 }
 
 function EffectsSection({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
+  const pro = useIsPro();
   const patch = usePatch(clip.id);
   const e = { ...defaultEffects(), ...clip.effects };
   const set = (p: Partial<Clip['effects']>, commit: boolean) => patch((c) => ({ ...c, effects: { ...defaultEffects(), ...c.effects, ...p } }) as Clip, commit);
@@ -459,16 +531,17 @@ function EffectsSection({ clip, asset }: { clip: Clip; asset?: MediaAsset }) {
       <SliderField disabled={off} label={T("Brightness")} value={e.brightness} min={0} max={200} onChange={(v, c) => set({ brightness: v }, c)} />
       <SliderField disabled={off} label={T("Contrast")} value={e.contrast} min={0} max={200} onChange={(v, c) => set({ contrast: v }, c)} />
       <SliderField disabled={off} label={T("Saturation")} value={e.saturation} min={0} max={200} onChange={(v, c) => set({ saturation: v }, c)} />
-      <SliderField disabled={off} label={T("Hue °")} value={e.hue} min={-180} max={180} onChange={(v, c) => set({ hue: v }, c)} />
-      <SliderField disabled={off} label={T("Warmth")} value={e.sepia} min={0} max={100} onChange={(v, c) => set({ sepia: v }, c)} />
-      <SliderField disabled={off} label={T("Grayscale")} value={e.grayscale} min={0} max={100} onChange={(v, c) => set({ grayscale: v }, c)} />
-      <SliderField disabled={off} label={T("Vignette")} value={e.vignette} min={0} max={100} onChange={(v, c) => set({ vignette: v }, c)} />
-      <SliderField disabled={off} label={T("Blur px")} value={e.blur} min={0} max={40} step={0.5} onChange={(v, c) => set({ blur: v }, c)} />
+      {pro && <SliderField disabled={off} label={T("Hue °")} value={e.hue} min={-180} max={180} onChange={(v, c) => set({ hue: v }, c)} />}
+      {pro && <SliderField disabled={off} label={T("Warmth")} value={e.sepia} min={0} max={100} onChange={(v, c) => set({ sepia: v }, c)} />}
+      {pro && <SliderField disabled={off} label={T("Grayscale")} value={e.grayscale} min={0} max={100} onChange={(v, c) => set({ grayscale: v }, c)} />}
+      {pro && <SliderField disabled={off} label={T("Vignette")} value={e.vignette} min={0} max={100} onChange={(v, c) => set({ vignette: v }, c)} />}
+      {pro && <SliderField disabled={off} label={T("Blur px")} value={e.blur} min={0} max={40} step={0.5} onChange={(v, c) => set({ blur: v }, c)} />}
     </Section>
   );
 }
 
 function AudioSection({ clip }: { clip: MediaClip }) {
+  const pro = useIsPro();
   const patch = usePatch(clip.id);
   const a = clip.audio;
   const set = (p: Partial<MediaClip['audio']>, commit: boolean) =>
@@ -477,7 +550,7 @@ function AudioSection({ clip }: { clip: MediaClip }) {
   return (
     <Section title={T("Audio")} action={<ResetButton label={T("Reset audio")} onClick={() => set(defaultAudio(), true)} />}>
       <SliderField label={T("Volume %")} value={a.volume} min={0} max={2} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ volume: v }, c)} />
-      <SliderField
+      {pro && <SliderField
         label={T("Pan")}
         value={a.pan}
         min={-1}
@@ -491,7 +564,7 @@ function AudioSection({ clip }: { clip: MediaClip }) {
           return m.startsWith('L') ? -n : n;
         }}
         onChange={(v, c) => set({ pan: v }, c)}
-      />
+      />}
       {clip.type === 'media' && useMediaStore.getState().assets[clip.assetId]?.kind === 'video' && !isOnAudioTrack(clip) && (
         <button className="field mb-1 w-full text-[12px]" onClick={() => extractAudio(clip.id)}>
           {T('Extract audio to its own track')}
@@ -767,6 +840,7 @@ function ProjectInspector() {
             onChange={(v) => setUI({ quality: v })}
           />
         </Row>
+        {useIsPro() && (<>
         <Row label={T("Renderer")}>
           <Segmented<PreviewRenderer>
             label={T("Preview renderer")}
@@ -781,7 +855,8 @@ function ProjectInspector() {
         <Row label={T("Perf stats")}>
           <Toggle label={T("Show performance stats")} checked={showStats} onChange={(v) => setUI({ showStats: v })} />
         </Row>
-        <p className="text-[11px] leading-snug text-muted">GPU shows video directly through the browser compositor (smoothest). Quality applies to the Canvas renderer.</p>
+        </>)}
+        <p className="text-[11px] leading-snug text-muted">{T('GPU shows video directly through the browser compositor (smoothest). Quality applies to the Canvas renderer.')}</p>
       </Section>
     </>
   );
@@ -790,6 +865,7 @@ function ProjectInspector() {
 export function Inspector({ onClose }: { onClose?: () => void }) {
   const clip = useProjectStore((s) => (s.selectedClipId ? s.project.clips[s.selectedClipId] : null));
   const transitionId = useProjectStore((s) => s.selectedTransitionId);
+  const pro = useIsPro();
   const onAudioTrack = useProjectStore((s) => (clip ? s.project.tracks.find((t) => t.id === clip.trackId)?.kind === 'audio' : false));
   const asset = useMediaStore((s) => (clip?.type === 'media' ? s.assets[clip.assetId] : undefined));
 
@@ -804,6 +880,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
         <AnimationSection clip={clip} />
         <TransitionInSection clip={clip} />
         <EffectsSection clip={clip} asset={asset} />
+        {pro && <ProEffectsSection clip={clip} />}
       </>
     );
   else if (!asset) body = <p className="p-3 text-[12px] text-muted">{T("The media for this clip was removed.")}</p>;
@@ -820,9 +897,10 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
         <TransformSection key={clip.id} clip={clip} />
         <AnimationSection clip={clip} />
         <TransitionInSection clip={clip} />
-        <CropSection clip={clip} />
+        {pro && <CropSection clip={clip} />}
         {asset.kind === 'video' && <SpeedSection clip={clip} />}
         <EffectsSection clip={clip} asset={asset} />
+        {pro && <ProEffectsSection clip={clip} />}
         {asset.kind === 'video' && <AudioSection clip={clip} />}
       </>
     );

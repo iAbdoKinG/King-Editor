@@ -164,7 +164,7 @@ export function MediaLibrary() {
         </div>
       )}
       <p className="border-t border-line px-3 py-2 text-[10.5px] leading-snug text-muted/80">
-        {T('Files stay on this device and are never uploaded. Work lasts for this session only — refreshing or closing discards it.')}
+        {T('Projects are saved automatically on this device. Nothing is uploaded.')}
       </p>
     </div>
   );

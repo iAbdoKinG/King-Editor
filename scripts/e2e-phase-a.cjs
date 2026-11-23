@@ -48,6 +48,7 @@ async function pngDiff(page, a, b) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('dialog', (d) => (d.type() === 'prompt' ? d.accept('Test preset') : d.accept()));
   await page.goto('http://localhost:4173/?debug');
+  await page.evaluate(() => window.__KING__.useUIStore.getState().setMode('pro'));
   const K = (fn, arg) => page.evaluate(fn, arg);
 
   await page.setInputFiles('[data-testid=file-input]', [m('clipA.webm'), m('portrait.webm'), m('speech.ogg')]);

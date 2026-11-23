@@ -463,7 +463,7 @@ export async function runExport(
   const probe = document.createElement('video');
   const playableHere = probe.canPlayType(mime) !== '';
 
-  const safe = (project.settings.name || 'King Editor').replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'King Editor';
+  const safe = (project.settings.name || 'Qissa').replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'Qissa';
   onProgress(1, 'verifying');
   return {
     blob,

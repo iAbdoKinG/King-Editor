@@ -33,7 +33,24 @@ export function defaultTransform(): Transform {
 }
 
 export function defaultEffects(): Effects {
-  return { brightness: 100, contrast: 100, saturation: 100, blur: 0, hue: 0, sepia: 0, grayscale: 0, vignette: 0 };
+  return {
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    blur: 0,
+    hue: 0,
+    sepia: 0,
+    grayscale: 0,
+    vignette: 0,
+    invert: 0,
+    radius: 0,
+    blend: 'normal',
+    shadow: 0,
+    shadowX: 0,
+    shadowY: 12,
+    shadowBlur: 24,
+    shadowColor: '#000000',
+  };
 }
 
 export function defaultAudio(): AudioProps {
@@ -183,13 +200,36 @@ export function createTextClip(trackId: string, start: number, text = T('Your ti
   };
 }
 
-export function clipsOnTrack(project: Project, trackId: string, excludeId?: string): Clip[] {
-  const out: Clip[] = [];
-  for (const id in project.clips) {
-    const c = project.clips[id];
-    if (c.trackId === trackId && c.id !== excludeId) out.push(c);
+/**
+ * Per-track clip lists sorted by start, built once per project version.
+ * Project clip records are immutable (every edit produces a new object), so
+ * caching by object identity can never return stale data.
+ */
+const trackIndexCache = new WeakMap<Record<string, Clip>, Map<string, readonly Clip[]>>();
+
+export function trackIndex(project: Project): Map<string, readonly Clip[]> {
+  let idx = trackIndexCache.get(project.clips);
+  if (!idx) {
+    const m = new Map<string, Clip[]>();
+    for (const id in project.clips) {
+      const c = project.clips[id];
+      const list = m.get(c.trackId);
+      if (list) list.push(c);
+      else m.set(c.trackId, [c]);
+    }
+    for (const list of m.values()) list.sort((a, b) => a.start - b.start);
+    idx = m;
+    trackIndexCache.set(project.clips, idx);
   }
-  return out.sort((a, b) => a.start - b.start);
+  return idx;
+}
+
+const EMPTY: readonly Clip[] = Object.freeze([]);
+
+/** Clips on a track sorted by start (shared, read-only array unless `excludeId` is given). */
+export function clipsOnTrack(project: Project, trackId: string, excludeId?: string): readonly Clip[] {
+  const list = trackIndex(project).get(trackId) ?? EMPTY;
+  return excludeId ? list.filter((c) => c.id !== excludeId) : list;
 }
 
 export function projectDuration(project: Project): number {

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 
+import { storage } from '../utils/storage';
+
 export type PreviewQuality = 'full' | 'half' | 'quarter';
+/** Simple shows the essentials; Pro shows every control and the pro effects. */
+export type EditorMode = 'simple' | 'pro';
 /** 'gpu' shows media elements directly (smooth); 'canvas' draws every frame into a canvas. */
 export type PreviewRenderer = 'gpu' | 'canvas';
 export type Sheet = 'media' | 'inspector' | null;
@@ -25,15 +29,18 @@ interface UIState {
   sheet: Sheet;
   snapping: boolean;
   quality: PreviewQuality;
+  mode: EditorMode;
+  setMode: (m: EditorMode) => void;
   renderer: PreviewRenderer;
   showStats: boolean;
   exportOpen: boolean;
   themeOpen: boolean;
   presetsOpen: boolean;
+  shortcutsOpen: boolean;
   downloadOpen: boolean;
   contextMenu: ContextMenuState | null;
   toasts: Toast[];
-  set: (patch: Partial<Omit<UIState, 'set' | 'toast' | 'zoomBy'>>) => void;
+  set: (patch: Partial<Omit<UIState, 'set' | 'toast' | 'zoomBy' | 'setMode'>>) => void;
   zoomBy: (factor: number) => void;
   toast: (text: string, tone?: Toast['tone']) => void;
 }
@@ -51,11 +58,17 @@ export const useUIStore = create<UIState>((set, get) => ({
   sheet: null,
   snapping: true,
   quality: 'half',
+  mode: storage.get<EditorMode>('mode') === 'pro' ? 'pro' : 'simple',
+  setMode: (mode) => {
+    storage.set('mode', mode);
+    set({ mode });
+  },
   renderer: 'gpu',
   showStats: false,
   exportOpen: false,
   themeOpen: false,
   presetsOpen: false,
+  shortcutsOpen: false,
   downloadOpen: false,
   contextMenu: null,
   toasts: [],

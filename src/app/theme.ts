@@ -28,6 +28,11 @@ export interface ThemePreset {
 
 export const THEME_PRESETS: ThemePreset[] = [
   {
+    id: 'studio',
+    name: 'Studio',
+    colors: { bg: '#0E1014', surface: '#161920', elevated: '#1F232C', accent: '#8B6CFF', text: '#F1F2F6', muted: '#8D94A6', line: '#2A2F3A', video: '#4A3F8C', audio: '#255E54', textClip: '#7E4634' },
+  },
+  {
     id: 'midnight',
     name: 'Midnight',
     colors: { bg: '#15191D', surface: '#22282E', elevated: '#2C343B', accent: '#91C1C5', text: '#F2F4F5', muted: '#9CAAB1', line: '#39434A', video: '#4F7477', audio: '#5A6F52', textClip: '#7A6A52' },
@@ -113,7 +118,7 @@ interface ThemeState {
 const saved = storage.get<{ themeId: string; custom: ThemeColors }>('theme');
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  themeId: saved?.themeId ?? 'midnight',
+  themeId: saved?.themeId ?? 'studio',
   custom: saved?.custom ?? deriveCustom({ bg: '#14161C', surface: '#1F232C', accent: '#C792EA', text: '#F2F2F7' }),
   setTheme: (themeId) => {
     set({ themeId });

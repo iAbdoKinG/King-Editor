@@ -1,28 +1,26 @@
 /**
- * KING EDITOR mark: a crown cut into three clips by two edit
- * points, resting on a timeline track.
+ * Logo mark: three clips on a timeline, one of them cut by the playhead.
  */
-export const MARK_PATHS = {
-  crown: 'M8 42V18l11.5 10.54V42zM22.5 42V25.46L32 12l9.5 13.46V42zM44.5 42V28.54L56 18v24z',
-  track: 'M10 46h44a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2z',
-};
+import { BRAND, MARK } from '../app/brand';
+import { isArabic } from '../i18n';
 
 export function LogoMark({ size = 24, className }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="4 4 56 56" className={className} aria-hidden="true">
-      <path d={MARK_PATHS.crown} fill="#F2F4F5" />
-      <path d={MARK_PATHS.track} fill="#91C1C5" />
+      {MARK.clips.map((c, i) => (
+        <rect key={i} x={c.x} y={c.y} width={c.w} height={8.5} rx={3} fill={c.color} />
+      ))}
+      <rect x={MARK.playhead.x} y={MARK.playhead.y} width={MARK.playhead.w} height={MARK.playhead.h} rx={1.5} fill="var(--color-text)" />
+      <path d={MARK.head} fill="var(--color-text)" />
     </svg>
   );
 }
 
 export function Wordmark() {
   return (
-    <div className="flex items-center gap-2 select-none" aria-label="KING EDITOR">
-      <LogoMark size={22} />
-      <span className="text-[13px] font-bold tracking-[0.18em] text-text whitespace-nowrap">
-        KING<span className="text-accent font-medium"> EDITOR</span>
-      </span>
+    <div className="flex select-none items-center gap-2" aria-label={BRAND.name}>
+      <LogoMark size={24} />
+      <span className="whitespace-nowrap text-[15px] font-bold tracking-[0.02em] text-text">{isArabic() ? BRAND.nameAr : BRAND.name}</span>
     </div>
   );
 }

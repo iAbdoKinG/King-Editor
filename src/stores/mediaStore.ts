@@ -18,6 +18,8 @@ interface MediaState {
   importFiles: (files: FileList | File[]) => Promise<{ added: string[]; rejected: string[] }>;
   /** Desktop: load assets referenced by a project file (streamed from disk). */
   loadFromPaths: (entries: PathEntry[]) => Promise<void>;
+  /** Browser library: load stored media files, keeping their asset ids. */
+  loadFromFiles: (entries: Array<Pick<MediaAsset, 'id' | 'kind' | 'name' | 'size' | 'mime'> & { file: File | null }>) => Promise<void>;
   clear: () => void;
   remove: (id: string) => void;
 }
@@ -119,6 +121,27 @@ export const useMediaStore = create<MediaState>((set, get) => {
         set((s) => ({ assets: { ...s.assets, [e.id]: asset }, order: [...s.order, e.id] }));
       }
       await Promise.all(entries.filter((e) => e.exists).map((e) => analyze(e.id)));
+    },
+
+    loadFromFiles: async (entries) => {
+      for (const e of entries) {
+        const asset: MediaAsset = {
+          id: e.id,
+          kind: e.kind,
+          name: e.name,
+          size: e.size,
+          mime: e.mime,
+          url: e.file ? URL.createObjectURL(e.file) : '',
+          duration: 0,
+          width: 0,
+          height: 0,
+          status: e.file ? 'loading' : 'error',
+          error: e.file ? undefined : 'File not found.',
+        };
+        if (e.file) fileStore.set(e.id, e.file);
+        set((s) => ({ assets: { ...s.assets, [e.id]: asset }, order: [...s.order, e.id] }));
+      }
+      await Promise.all(entries.filter((e) => e.file).map((e) => analyze(e.id)));
     },
 
     clear: () => {

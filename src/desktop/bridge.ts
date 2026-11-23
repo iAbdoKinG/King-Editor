@@ -25,7 +25,7 @@ export function mediaUrl(path: string): string {
 }
 
 export const WINDOWS_DOWNLOADS = {
-  installer: 'https://github.com/iAbdoKinG/King-Editor/releases/download/desktop-latest/KING-EDITOR-Setup.exe',
-  portable: 'https://github.com/iAbdoKinG/King-Editor/releases/download/desktop-latest/KING-EDITOR-Portable.exe',
+  installer: 'https://github.com/iAbdoKinG/King-Editor/releases/download/desktop-latest/Qissa-Setup.exe',
+  portable: 'https://github.com/iAbdoKinG/King-Editor/releases/download/desktop-latest/Qissa-Portable.exe',
   page: 'https://github.com/iAbdoKinG/King-Editor/releases/tag/desktop-latest',
 };

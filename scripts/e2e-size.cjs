@@ -21,6 +21,7 @@ const check = (name, ok, detail = '') => {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('dialog', (d) => d.accept());
   await page.goto('http://localhost:4173/?debug');
+  await page.evaluate(() => window.__KING__.useUIStore.getState().setMode('pro'));
   check('Arabic UI by default for an Arabic device', (await page.evaluate(() => document.documentElement.dir)) === 'rtl');
 
   await page.setInputFiles('[data-testid=file-input]', [path.join(mediaDir, 'clipA.webm')]);

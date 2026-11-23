@@ -8,6 +8,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useUIStore } from '../../stores/uiStore';
 import type { Project } from '../../types/project';
 import { parseProjectFile, serializeProject } from './projectFile';
+import { hasUnsavedChanges, saveNow, useSession } from '../library/session';
+import { uid } from '../../utils/id';
 
 interface FileState {
   path: string | null;
@@ -38,7 +40,7 @@ export async function saveProject(saveAs = false): Promise<void> {
 export async function openProject(): Promise<void> {
   if (!desktop) return;
   const toast = useUIStore.getState().toast;
-  if (isDirty() && !window.confirm(T('Replace the current project? Unsaved changes will be lost.'))) return;
+  if (hasUnsavedChanges()) await saveNow();
   const file = await desktop.openProject();
   if (!file) return;
   let parsed;
@@ -54,6 +56,9 @@ export async function openProject(): Promise<void> {
   useProjectStore.getState().load(parsed.project);
   engine.seek(0);
   useProjectFileStore.setState({ path: file.path, saved: useProjectStore.getState().project });
+  // The opened file becomes a project in the library (autosaved from now on).
+  useSession.setState({ view: 'editor', currentId: uid('prj'), createdAt: Date.now(), saveState: 'idle', saved: null });
+  void saveNow();
   await desktop.registerMedia(parsed.assets.filter((_, i) => exists[i]).map((a) => a.path));
   void useMediaStore.getState().loadFromPaths(parsed.assets.map((a, i) => ({ ...a, exists: exists[i] })));
   const missing = exists.filter((x) => !x).length;

@@ -48,11 +48,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la
-          test -f KING-EDITOR-Setup.exe && test -f KING-EDITOR-Portable.exe
-          NOTES="KING EDITOR for Windows — built from ${GITHUB_SHA::7} on $(date -u +%F). Installer: KING-EDITOR-Setup.exe · Portable: KING-EDITOR-Portable.exe"
+          test -f Qissa-Setup.exe && test -f Qissa-Portable.exe
+          NOTES="Qissa for Windows — built from ${GITHUB_SHA::7} on $(date -u +%F). Installer: Qissa-Setup.exe · Portable: Qissa-Portable.exe"
           if gh release view desktop-latest >/dev/null 2>&1; then
-            gh release upload desktop-latest KING-EDITOR-Setup.exe KING-EDITOR-Portable.exe --clobber
+            # Remove assets from the previous name
+            gh release delete-asset desktop-latest KING-EDITOR-Setup.exe -y 2>/dev/null || true
+            gh release delete-asset desktop-latest KING-EDITOR-Portable.exe -y 2>/dev/null || true
+            gh release edit desktop-latest --title "Qissa for Windows"
+            gh release upload desktop-latest Qissa-Setup.exe Qissa-Portable.exe --clobber
             gh release edit desktop-latest --notes "$NOTES"
           else
-            gh release create desktop-latest KING-EDITOR-Setup.exe KING-EDITOR-Portable.exe --title "KING EDITOR for Windows" --notes "$NOTES" --latest
+            gh release create desktop-latest Qissa-Setup.exe Qissa-Portable.exe --title "Qissa for Windows" --notes "$NOTES" --latest
           fi

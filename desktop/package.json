@@ -1,9 +1,9 @@
 {
   "name": "king-editor-desktop",
-  "productName": "KING EDITOR",
+  "productName": "Qissa",
   "version": "1.0.0",
-  "description": "KING EDITOR for Windows",
-  "author": "KING EDITOR",
+  "description": "Qissa video editor for Windows",
+  "author": "Qissa",
   "license": "UNLICENSED",
   "private": true,
   "main": "main.cjs",
@@ -14,9 +14,9 @@
     "dist:linux": "npm run prepare-app && electron-builder --linux dir --publish never"
   },
   "build": {
-    "appId": "app.kingeditor.desktop",
-    "productName": "KING EDITOR",
-    "copyright": "KING EDITOR",
+    "appId": "app.qissa.desktop",
+    "productName": "Qissa",
+    "copyright": "Qissa",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -51,8 +51,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "KING EDITOR",
-      "artifactName": "KING-EDITOR-Setup.${ext}",
+      "shortcutName": "Qissa",
+      "artifactName": "Qissa-Setup.${ext}",
       "installerLanguages": [
         "en_US",
         "ar_SA"
@@ -60,13 +60,18 @@
       "multiLanguageInstaller": true
     },
     "portable": {
-      "artifactName": "KING-EDITOR-Portable.${ext}"
+      "artifactName": "Qissa-Portable.${ext}"
     },
     "fileAssociations": [
       {
+        "ext": "qissa",
+        "name": "Qissa Project",
+        "description": "Qissa Project"
+      },
+      {
         "ext": "kingproj",
-        "name": "KING EDITOR Project",
-        "description": "KING EDITOR Project"
+        "name": "Qissa Project (legacy)",
+        "description": "Qissa Project"
       }
     ]
   },

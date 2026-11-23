@@ -25,7 +25,7 @@ async function share(list: Preset[], title: string): Promise<void> {
   const url = shareLink(list);
   try {
     if (navigator.share) {
-      await navigator.share({ title: `KING EDITOR — ${title}`, url });
+      await navigator.share({ title: `Qissa — ${title}`, url });
       return;
     }
   } catch (e) {
@@ -118,7 +118,7 @@ export function PresetsDialog() {
               <Icon name="plus" size={14} /> Import
             </button>
             {presets.length > 0 && (
-              <button className="field !h-8 text-[12px]" onClick={() => void shareFile(presets, 'King Editor presets')}>
+              <button className="field !h-8 text-[12px]" onClick={() => void shareFile(presets, 'Qissa presets')}>
                 {T('Export all')}
               </button>
             )}
@@ -129,7 +129,7 @@ export function PresetsDialog() {
           <input
             ref={fileRef}
             type="file"
-            accept=".kingpreset,application/json,.json"
+            accept=".qissapreset,.kingpreset,application/json,.json"
             className="hidden"
             onChange={async (e) => {
               const f = e.target.files?.[0];

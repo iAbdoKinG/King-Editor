@@ -20,6 +20,7 @@ export function zoom(f: number): void {
 
 /** Timeline toolbar for the wide (iPad landscape / desktop) layout. */
 export function EditToolbar() {
+  const pro = useUIStore((s) => s.mode) === 'pro';
   const hasSel = useProjectStore((s) => !!s.selectedClipId);
   const apply = useProjectStore((s) => s.apply);
   const snapping = useUIStore((s) => s.snapping);
@@ -29,7 +30,7 @@ export function EditToolbar() {
       <Btn icon="split" label={T("Split at playhead (S)")} text="Split" onClick={splitAtPlayhead} />
       <Btn icon="duplicate" label={T("Duplicate (⌘D)")} onClick={duplicateSelected} disabled={!hasSel} />
       <Btn icon="trash" label={T("Delete (⌫)")} onClick={() => deleteSelected(false)} disabled={!hasSel} />
-      <Btn icon="ripple" label={T("Ripple delete (⇧⌫)")} onClick={() => deleteSelected(true)} disabled={!hasSel} />
+      {pro && <Btn icon="ripple" label={T("Ripple delete (⇧⌫)")} onClick={() => deleteSelected(true)} disabled={!hasSel} />}
       <div className="mx-1.5 h-5 w-px bg-line" />
       <Btn icon="text" label={T("Add text (T)")} text="Text" onClick={addText} />
       <Btn icon="flag" label={T("Add marker (M)")} onClick={addMarkerAtPlayhead} />

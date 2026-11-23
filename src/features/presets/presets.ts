@@ -1,6 +1,6 @@
 /**
  * User presets, saved on this device (localStorage) and shareable as a link
- * or a small `.kingpreset` file. Imported data is validated and clamped field by
+ * or a small `.qissapreset` file. Imported data is validated and clamped field by
  * field: presets are plain values only.
  */
 import { create } from 'zustand';
@@ -59,8 +59,31 @@ export function cleanEffects(d: Record<string, unknown>): Effects {
     sepia: num(d.sepia, 0, 100, 0),
     grayscale: num(d.grayscale, 0, 100, 0),
     vignette: num(d.vignette, 0, 100, 0),
+    invert: num(d.invert, 0, 100, 0),
+    radius: num(d.radius, 0, 2000, 0),
+    blend: oneOf(d.blend, BLEND_MODES, 'normal'),
+    shadow: num(d.shadow, 0, 100, 0),
+    shadowX: num(d.shadowX, -500, 500, e.shadowX ?? 0),
+    shadowY: num(d.shadowY, -500, 500, e.shadowY ?? 12),
+    shadowBlur: num(d.shadowBlur, 0, 300, e.shadowBlur ?? 24),
+    shadowColor: color(d.shadowColor, '#000000').slice(0, 7),
   };
 }
+
+export const BLEND_MODES = [
+  'normal',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+] as const;
 
 export function cleanTextStyle(d: Record<string, unknown>): TextStyle {
   return {
@@ -182,10 +205,10 @@ export function parseBundle(text: string): Preset[] {
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error(T('This is not a KING EDITOR preset file.'));
+    throw new Error(T('This is not a preset file.'));
   }
   const b = raw as Partial<Bundle>;
-  if (!b || b.app !== 'king-editor' || !Array.isArray(b.presets)) throw new Error(T('This is not a KING EDITOR preset file.'));
+  if (!b || b.app !== 'king-editor' || !Array.isArray(b.presets)) throw new Error(T('This is not a preset file.'));
   const out = b.presets.slice(0, 200).map(sanitizePreset).filter((p): p is Preset => !!p);
   if (!out.length) throw new Error(T('No valid presets found.'));
   return out;
@@ -203,7 +226,7 @@ function b64urlDecode(s: string): string {
   return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 
-/** A link that opens KING EDITOR and offers to import the presets. Data lives in the URL fragment (never sent to a server). */
+/** A link that opens the editor and offers to import the presets. Data lives in the URL fragment (never sent to a server). */
 export function shareLink(list: Preset[]): string {
   const base = location.href.split('#')[0];
   return `${base}#presets=${b64urlEncode(JSON.stringify(toBundle(list)))}`;
@@ -221,5 +244,5 @@ export function presetsFromLocation(): Preset[] | null {
 
 export function presetFile(list: Preset[], name = 'presets'): File {
   const safe = name.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'presets';
-  return new File([JSON.stringify(toBundle(list), null, 2)], `${safe}.kingpreset`, { type: 'application/json' });
+  return new File([JSON.stringify(toBundle(list), null, 2)], `${safe}.qissapreset`, { type: 'application/json' });
 }

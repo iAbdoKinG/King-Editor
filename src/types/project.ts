@@ -1,4 +1,4 @@
-/** Core data model for KING EDITOR projects. All times are in seconds. */
+/** Core data model for Qissa projects. All times are in seconds. */
 
 export type MediaKind = 'video' | 'audio' | 'image';
 
@@ -68,7 +68,31 @@ export interface Effects {
   sepia: number; // 0–100
   grayscale: number; // 0–100
   vignette: number; // 0–100
+  // Pro effects
+  invert?: number; // 0–100
+  /** Corner radius in project pixels (scales with the clip). */
+  radius?: number;
+  blend?: BlendMode;
+  shadow?: number; // 0 = off, else opacity 0–100
+  shadowX?: number; // frame pixels
+  shadowY?: number;
+  shadowBlur?: number;
+  shadowColor?: string;
 }
+
+export type BlendMode =
+  | 'normal'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'darken'
+  | 'lighten'
+  | 'color-dodge'
+  | 'color-burn'
+  | 'hard-light'
+  | 'soft-light'
+  | 'difference'
+  | 'exclusion';
 
 export interface AudioProps {
   volume: number; // 1 = unity, up to 2

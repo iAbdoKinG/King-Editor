@@ -4,7 +4,8 @@ import { parseBundle, sanitizePreset, toBundle } from './presets';
 describe('preset sanitizing', () => {
   it('clamps values and drops unknown fields', () => {
     const p = sanitizePreset({ kind: 'effects', name: 'x', data: { brightness: 9999, contrast: 'evil', hue: -500, extra: '<script>' } })!;
-    expect(p.data).toEqual({ brightness: 200, contrast: 100, saturation: 100, blur: 0, hue: -180, sepia: 0, grayscale: 0, vignette: 0 });
+    expect(p.data).toMatchObject({ brightness: 200, contrast: 100, saturation: 100, blur: 0, hue: -180, sepia: 0, grayscale: 0, vignette: 0, blend: 'normal', shadow: 0 });
+    expect((p.data as Record<string, unknown>).extra).toBeUndefined();
   });
   it('rejects unknown kinds and malformed bundles', () => {
     expect(sanitizePreset({ kind: 'code', data: {} })).toBeNull();

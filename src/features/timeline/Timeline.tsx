@@ -574,7 +574,7 @@ export function Timeline({ compact }: { compact: boolean }) {
               className={`absolute left-0 right-0 border-b border-line/60 ${i % 2 ? 'bg-white/[0.012]' : ''} ${
                 l.track.hidden || l.track.muted ? 'opacity-50' : ''
               }`}
-              style={{ top: RULER_H + l.top, height: l.h }}
+              style={{ top: RULER_H + l.top, height: l.h, contain: 'layout paint style' }}
               data-track-id={l.track.id}
             >
               {(clipsByTrack.get(l.track.id) ?? []).map((c) =>

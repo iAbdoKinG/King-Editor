@@ -4,7 +4,8 @@
  */
 import { engine } from '../engine/playback/engine';
 import { isDesktop } from '../desktop/bridge';
-import { initDesktopProjects, isDirty } from '../features/project/projectActions';
+import { initDesktopProjects } from '../features/project/projectActions';
+import { hasUnsavedChanges, initSession, startScratch } from '../features/library/session';
 import { imageCache } from '../engine/rendering/imageCache';
 import { releaseWaveform } from '../features/media/waveform';
 import { ensureFont, useFontStore } from '../features/fonts/fonts';
@@ -40,6 +41,9 @@ export function bootstrap(): void {
   // Resource advisor (debounced; never on the hot path).
   let advTimer = 0;
   initDesktopProjects();
+  initSession();
+  // Automated tests (?debug) start directly in an editor with a scratch project.
+  if (new URLSearchParams(location.search).has('debug')) startScratch();
   const advise = () => {
     if (isDesktop) return;
     clearTimeout(advTimer);
@@ -76,9 +80,8 @@ export function bootstrap(): void {
 
   // Session-only editing: warn before discarding work.
   window.addEventListener('beforeunload', (e) => {
-    const hasWork = isDesktop
-      ? isDirty()
-      : Object.keys(useProjectStore.getState().project.clips).length > 0 || useMediaStore.getState().order.length > 0;
+    // Projects autosave; only warn while a save is still pending.
+    const hasWork = hasUnsavedChanges();
     if (hasWork) {
       e.preventDefault();
       e.returnValue = '';

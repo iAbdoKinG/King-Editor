@@ -1,52 +1,135 @@
 import { useEffect } from 'react';
 import { isDesktop } from '../desktop/bridge';
-import { openProject, saveProject } from '../features/project/projectActions';
 import { engine } from '../engine/playback/engine';
-import { addMarkerAtPlayhead, jumpMarker, addText, deleteSelected, duplicateSelected, seekBy, splitAtPlayhead, stepFrames, togglePlay } from '../features/timeline/actions';
+import { openProject } from '../features/project/projectActions';
+import { actionFor, comboFromEvent } from '../features/shortcuts/keymap';
+import {
+  addMarkerAtPlayhead,
+  addText,
+  deleteSelected,
+  duplicateSelected,
+  extractAudio,
+  jumpMarker,
+  seekBy,
+  splitAtPlayhead,
+  stepFrames,
+  togglePlay,
+} from '../features/timeline/actions';
 import { zoom } from '../features/timeline/EditToolbar';
 import { useProjectStore } from '../stores/projectStore';
 import { useUIStore } from '../stores/uiStore';
 
-/** Desktop keyboard shortcuts. Ignored while typing in a field. */
+/** Runs the action bound to a shortcut. Returns false if the action does not apply here. */
+export function runAction(id: string): boolean {
+  const ps = useProjectStore.getState();
+  const ui = useUIStore.getState();
+  switch (id) {
+    case 'playPause':
+      togglePlay();
+      break;
+    case 'prevFrame':
+      stepFrames(-1);
+      break;
+    case 'nextFrame':
+      stepFrames(1);
+      break;
+    case 'back1s':
+      seekBy(-1);
+      break;
+    case 'fwd1s':
+      seekBy(1);
+      break;
+    case 'toStart':
+      engine.seek(0);
+      break;
+    case 'toEnd':
+      engine.seek(engine.clock.duration);
+      break;
+    case 'split':
+      splitAtPlayhead();
+      break;
+    case 'delete':
+      deleteSelected(false);
+      break;
+    case 'rippleDelete':
+      deleteSelected(true);
+      break;
+    case 'duplicate':
+      duplicateSelected();
+      break;
+    case 'addText':
+      addText();
+      break;
+    case 'extractAudio':
+      extractAudio();
+      break;
+    case 'undo':
+      ps.undo();
+      break;
+    case 'redo':
+      ps.redo();
+      break;
+    case 'marker':
+      addMarkerAtPlayhead();
+      break;
+    case 'markerNamed':
+      window.dispatchEvent(new CustomEvent('king:edit-marker', { detail: addMarkerAtPlayhead() }));
+      break;
+    case 'prevMarker':
+      jumpMarker(-1);
+      break;
+    case 'nextMarker':
+      jumpMarker(1);
+      break;
+    case 'snapping':
+      ui.set({ snapping: !ui.snapping });
+      break;
+    case 'zoomIn':
+      zoom(1.5);
+      break;
+    case 'zoomOut':
+      zoom(1 / 1.5);
+      break;
+    case 'deselect':
+      ps.select(null);
+      ui.set({ contextMenu: null, sheet: null, exportOpen: false, shortcutsOpen: false });
+      break;
+    case 'focusMode':
+      ui.set({ focusMode: !ui.focusMode });
+      break;
+    case 'toggleMode':
+      ui.setMode(ui.mode === 'pro' ? 'simple' : 'pro');
+      break;
+    case 'shortcuts':
+      ui.set({ shortcutsOpen: true });
+      break;
+    case 'save':
+      window.dispatchEvent(new CustomEvent('king:save'));
+      break;
+    case 'open':
+      if (!isDesktop) return false;
+      void openProject();
+      break;
+    case 'home':
+      window.dispatchEvent(new CustomEvent('king:home'));
+      break;
+    default:
+      return false;
+  }
+  return true;
+}
+
+/** Keyboard shortcuts (customizable). Ignored while typing in a field or recording a new binding. */
 export function useShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (el.closest('input, textarea, select, [contenteditable="true"]')) return;
-      const mod = e.metaKey || e.ctrlKey;
-      const ps = useProjectStore.getState();
-      const ui = useUIStore.getState();
-      const k = e.key.toLowerCase();
-      let handled = true;
-      if (mod && k === 'z') e.shiftKey ? ps.redo() : ps.undo();
-      else if (mod && k === 'y') ps.redo();
-      else if (mod && k === 'd') duplicateSelected();
-      else if (mod && k === 'b') splitAtPlayhead();
-      else if (mod && k === 's' && isDesktop) void saveProject(e.shiftKey);
-      else if (mod && k === 'o' && isDesktop) void openProject();
-      else if (mod) handled = false;
-      else if (e.key === ' ' || k === 'k') togglePlay();
-      else if (e.key === 'ArrowLeft') e.shiftKey ? seekBy(-1) : stepFrames(-1);
-      else if (e.key === 'ArrowRight') e.shiftKey ? seekBy(1) : stepFrames(1);
-      else if (e.key === 'Home') engine.seek(0);
-      else if (e.key === 'End') engine.seek(engine.clock.duration);
-      else if (k === 's') splitAtPlayhead();
-      else if (k === 't') addText();
-      else if (k === 'm') {
-        const id = addMarkerAtPlayhead();
-        if (e.shiftKey) window.dispatchEvent(new CustomEvent('king:edit-marker', { detail: id }));
-      } else if (e.key === '[') jumpMarker(-1);
-      else if (e.key === ']') jumpMarker(1);
-      else if (k === 'n') ui.set({ snapping: !ui.snapping });
-      else if (k === 'f') ui.set({ focusMode: !ui.focusMode });
-      else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected(e.shiftKey);
-      else if (e.key === 'Escape') {
-        ps.select(null);
-        ui.set({ contextMenu: null, sheet: null, exportOpen: false });
-      } else if (e.key === '=' || e.key === '+') zoom(1.5);
-      else if (e.key === '-' || e.key === '_') zoom(1 / 1.5);
-      else handled = false;
-      if (handled) e.preventDefault();
+      if (el.closest('input, textarea, select, [contenteditable="true"], [data-recording]')) return;
+      if (useUIStore.getState().shortcutsOpen && e.code !== 'Escape') return;
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const id = actionFor(combo);
+      if (id && runAction(id)) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

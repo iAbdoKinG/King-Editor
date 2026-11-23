@@ -3,6 +3,7 @@ import { t as T } from '../i18n';
 import { useUIStore } from '../stores/uiStore';
 import { Icon } from './Icon';
 import { LogoMark } from './Logo';
+import { BRAND } from '../app/brand';
 
 /** Explains and links the Windows desktop app (shown in browsers only). */
 export function DownloadDialog() {
@@ -15,7 +16,7 @@ export function DownloadDialog() {
       <div className="sheet-in safe-bottom w-full max-w-md rounded-t-2xl border border-line bg-surface shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <h2 className="flex items-center gap-2 text-[15px] font-semibold">
-            <LogoMark size={20} /> {T('Get KING EDITOR for Windows')}
+            <LogoMark size={20} /> {T('Get {name} for Windows', { name: BRAND.name })}
           </h2>
           <button className="icon-btn !h-8 !min-w-8" aria-label={T('Close')} onClick={close}>
             <Icon name="close" size={16} />

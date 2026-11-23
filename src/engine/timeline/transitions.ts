@@ -9,7 +9,7 @@
  */
 import type { Clip, Direction, Project, Transition, TransitionType } from '../../types/project';
 import { ease } from './animation';
-import { clipEnd, clipsOnTrack } from './model';
+import { clipEnd, clipsOnTrack, trackIndex } from './model';
 
 const EPS = 1e-4;
 
@@ -50,15 +50,38 @@ export interface Mix {
 
 export const IDENTITY_MIX: Mix = { alpha: 1, dx: 0, dy: 0, scale: 1, rotate: 0, blur: 0, brightness: 1, clip: null, audio: 1 };
 
+/** Touching neighbours of every clip, computed once per project version (O(n log n)). */
+const adjacencyCache = new WeakMap<Record<string, Clip>, Map<string, { prev: Clip | null; next: Clip | null }>>();
+
+function adjacency(project: Project): Map<string, { prev: Clip | null; next: Clip | null }> {
+  let adj = adjacencyCache.get(project.clips);
+  if (!adj) {
+    adj = new Map();
+    for (const list of trackIndex(project).values()) {
+      for (let i = 0; i < list.length; i++) adj.set(list[i].id, { prev: null, next: null });
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
+        // Neighbours touch within EPS; overlapping clips cannot exist, so only nearby entries can match.
+        for (let j = i + 1; j < list.length && list[j].start <= clipEnd(a) + EPS; j++) {
+          const b = list[j];
+          if (Math.abs(clipEnd(a) - b.start) < EPS) {
+            adj.get(a.id)!.next = b;
+            adj.get(b.id)!.prev = a;
+          }
+        }
+      }
+    }
+    adjacencyCache.set(project.clips, adj);
+  }
+  return adj;
+}
+
 export function prevAdjacent(project: Project, clip: Clip): Clip | null {
-  for (const c of clipsOnTrack(project, clip.trackId, clip.id)) if (Math.abs(clipEnd(c) - clip.start) < EPS) return c;
-  return null;
+  return adjacency(project).get(clip.id)?.prev ?? null;
 }
 
 export function nextAdjacent(project: Project, clip: Clip): Clip | null {
-  const end = clipEnd(clip);
-  for (const c of clipsOnTrack(project, clip.trackId, clip.id)) if (Math.abs(c.start - end) < EPS) return c;
-  return null;
+  return adjacency(project).get(clip.id)?.next ?? null;
 }
 
 /** Longest transition allowed between two clips (half on each side of the cut). */

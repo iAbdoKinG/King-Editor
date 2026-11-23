@@ -1,4 +1,6 @@
-# KING EDITOR
+# Qissa (قصّة)
+
+*Formerly KING EDITOR. The name and logo live in `src/app/brand.ts` (plus `desktop/package.json` for the Windows build).*
 
 A touch-first, privacy-by-default video editor PWA. iPad is the main target, with iPhone and desktop also supported. Everything runs locally in the browser: no accounts, no uploads, no analytics, no persistent storage (V1).
 
@@ -83,6 +85,33 @@ Keyboard: Space/K play · ←/→ frame · ⇧←/→ 1 s · S or ⌘B split · 
 - **Audio arrangement**: extract audio to its own track; per-track volume, mute and solo, applied identically in playback and export.
 - **Resource advisor**: warns once about workloads that are heavy for a browser (4K, very long media, many stacked videos, heavy blur, very long exports).
 - **Touch**: wider trim handles on touch screens; double-tap a clip to open its properties.
+
+## Projects, modes and shortcuts
+
+- **Home screen** with every saved project (thumbnail, length, size, last edited), plus New project presets (16:9, 9:16, 1:1, 4:5, 4:3, or custom W×H), rename, duplicate and delete.
+- **Autosave**: 1 s after each change and immediately when the app is hidden or closing.
+  - **Browser**: IndexedDB holds the project and one copy of each media file, on the device only.
+  - **Windows**: projects live in `Documents/Qissa/Projects` and reference media by path. A deleted project goes to the Recycle Bin.
+- **Simple / Pro modes**: Simple shows the essentials. Pro adds keyframes, anchor, crop, every colour control, pan, transition easing, renderer settings, and **pro effects**: blend modes, drop shadow, rounded corners and invert. The pro effects look the same in preview and export (mean difference 0.6/255).
+- **Keyboard shortcuts** can be changed (⌨ button, or `?`). They are bound to physical keys, so they work with an Arabic keyboard layout, and conflicts are resolved automatically. They are saved on the device.
+
+## Performance (milestone 7)
+
+Measured in Chromium with CPU throttling (`scripts/measure-large.cjs`, `measure-playback.cjs`, `measure-flicker.cjs`):
+
+| Scenario | Before | After |
+|---|---|---|
+| Picture hidden while dragging or scrubbing a clip | 92% of frames | **0%** |
+| 300-clip project, playback frame time p50 (4× slower CPU) | 133 ms | **33 ms** |
+| 300-clip project, drag frame time p50 / p95 (4× slower CPU) | 83 / 200 ms | **50–67 / 83–100 ms** |
+| Normal project, playback p95 (6× slower CPU) | 16.8 ms | 16.8 ms |
+| JS heap after 8 import/remove cycles | — | flat (9.5 → 9.5 MB) |
+
+Fixes behind these numbers:
+- The last decoded frame stays on screen while seeking.
+- Per-track clip index and neighbour maps are cached by immutable project identity, which removes O(n²) work per frame.
+- Timeline lanes use paint containment, which halves layerization work.
+- Waveform canvases are CPU-backed, so they don't each take a GPU layer.
 
 ## Frame size and export limits
 
