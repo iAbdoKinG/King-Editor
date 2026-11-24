@@ -10,7 +10,9 @@ import { formatBytes, formatDuration } from '../../utils/time';
 import { addAssetToTimeline } from '../timeline/actions';
 import { ASSET_DRAG_TYPE } from '../timeline/constants';
 
-const ACCEPT = 'video/*,audio/*,image/*,.mov,.m4v,.mkv,.m4a,.flac,.caf';
+/** Any audio/video/image; formats the browser cannot play are converted on import. */
+const ACCEPT =
+  'video/*,audio/*,image/*,.mov,.m4v,.mkv,.m4a,.flac,.caf,.ts,.mts,.m2ts,.avi,.flv,.f4v,.wmv,.asf,.mpg,.mpeg,.vob,.mxf,.3gp,.ogv,.dv,.rm,.rmvb,.wma,.ac3,.eac3,.dts,.amr,.ape,.mka,.mp2,.aif,.aiff,.wv';
 
 export function ImportButton({ className = '', label }: { className?: string; label?: string }) {
   const input = useRef<HTMLInputElement>(null);
@@ -85,7 +87,12 @@ const AssetRow = memo(function AssetRow({ asset, usage }: { asset: MediaAsset; u
         ) : (
           <Icon name={KIND_ICON[asset.kind]} size={18} />
         )}
-        {asset.status === 'loading' && <div className="absolute inset-0 animate-pulse bg-white/5" />}
+        {(asset.status === 'loading' || asset.status === 'converting') && <div className="absolute inset-0 animate-pulse bg-white/5" />}
+        {asset.status === 'converting' && (
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40" dir="ltr">
+            <div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round((asset.progress ?? 0) * 100)}%` }} />
+          </div>
+        )}
         <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 text-[9px] font-semibold uppercase tracking-wide text-text/90">
           {T(asset.kind)}
         </span>
@@ -95,7 +102,17 @@ const AssetRow = memo(function AssetRow({ asset, usage }: { asset: MediaAsset; u
           {asset.name}
         </div>
         <div className={`tnum truncate text-[11px] ${asset.status === 'error' ? 'text-danger' : 'text-muted'}`}>
-          {asset.status === 'error' ? T(asset.error ?? '') : asset.status === 'loading' ? T('Reading…') : <bdi dir="ltr">{meta}</bdi>}
+          {asset.status === 'error' ? (
+            T(asset.error ?? '')
+          ) : asset.status === 'loading' ? (
+            T('Reading…')
+          ) : asset.status === 'converting' ? (
+            <span data-testid="asset-converting">
+              {T('Converting…')} <bdi dir="ltr">{Math.round((asset.progress ?? 0) * 100)}%</bdi>
+            </span>
+          ) : (
+            <bdi dir="ltr">{meta}</bdi>
+          )}
         </div>
       </div>
       <button

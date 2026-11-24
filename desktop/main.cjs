@@ -105,6 +105,130 @@ let win = null;
 const PROJECT_EXT = /\.(qissa|kingproj)$/i;
 let pendingOpen = process.argv.find((a) => PROJECT_EXT.test(a)) ?? null;
 
+/* ------------------------- universal format import ------------------------- */
+// Files Chromium cannot play (TS, MKV, AVI, FLV, WMV, MPG, AC3, WMA, …) are
+// converted once with the bundled FFmpeg into Documents/Qissa/Converted.
+// H.264/AAC streams are copied without re-encoding; everything else is
+// transcoded to H.264/AAC. The original file is never modified.
+
+const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
+
+function ffmpegPath() {
+  try {
+    const p = require('ffmpeg-static');
+    // Inside the packaged app the binary lives next to app.asar, not inside it.
+    return p ? p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`) : null;
+  } catch {
+    return null;
+  }
+}
+
+function convertedRoot() {
+  const root = E2E_DIR ? path.join(E2E_DIR, 'converted') : path.join(app.getPath('documents'), 'Qissa', 'Converted');
+  fs.mkdirSync(root, { recursive: true });
+  return root;
+}
+
+const running = new Set();
+app.on('before-quit', () => {
+  for (const p of running) p.kill();
+});
+
+function runFfmpeg(args, onLine) {
+  return new Promise((resolve) => {
+    const bin = ffmpegPath();
+    if (!bin || !fs.existsSync(bin)) return resolve({ code: -1, err: 'ffmpeg missing' });
+    const proc = spawn(bin, ['-hide_banner', '-nostdin', ...args], { windowsHide: true });
+    running.add(proc);
+    let err = '';
+    let buf = '';
+    proc.stderr.on('data', (d) => {
+      const t = d.toString();
+      err = (err + t).slice(-20000);
+      buf += t;
+      const parts = buf.split(/[\r\n]+/);
+      buf = parts.pop();
+      for (const l of parts) onLine?.(l);
+    });
+    proc.on('error', () => {
+      running.delete(proc);
+      resolve({ code: -1, err });
+    });
+    proc.on('close', (code) => {
+      running.delete(proc);
+      resolve({ code, err });
+    });
+  });
+}
+
+const secs = (h, m, s) => Number(h) * 3600 + Number(m) * 60 + Number(s);
+
+/** Where the converted copy of `src` lives (stable per source file version, so conversions are reused). */
+async function convertedTarget(src, audioOnly) {
+  if (typeof src !== 'string' || !path.isAbsolute(src) || !allowedMedia.has(norm(src))) return null;
+  const st = await fsp.stat(src).catch(() => null);
+  if (!st) return null;
+  const key = crypto.createHash('sha1').update(`${norm(src)}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 10);
+  const base = path.basename(src).replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]+/g, '').slice(0, 80) || 'media';
+  return path.join(convertedRoot(), `${base}-${key}.${audioOnly ? 'm4a' : 'mp4'}`);
+}
+
+/** Fallback: the page converted the file itself (WebCodecs); store the result like a native conversion. */
+async function saveConverted(_e, { path: src, kind, data }) {
+  const out = await convertedTarget(src, kind === 'audio');
+  if (!out || !(data instanceof ArrayBuffer || ArrayBuffer.isView(data)) || !data.byteLength) return { error: 'denied' };
+  const tmp = `${out}.part`;
+  await fsp.writeFile(tmp, Buffer.from(data instanceof ArrayBuffer ? data : data.buffer));
+  await fsp.rename(tmp, out);
+  allowedMedia.add(norm(out));
+  return { path: out, size: data.byteLength };
+}
+
+async function convertMedia(event, { jobId, path: src, kind }) {
+  const audioOnly = kind === 'audio';
+  const out = await convertedTarget(src, audioOnly);
+  if (!out) return { error: 'denied' };
+  const send = (p) => {
+    if (!event.sender.isDestroyed()) event.sender.send('media:convert-progress', { jobId, progress: p });
+  };
+  if (fs.existsSync(out) && fs.statSync(out).size > 0) {
+    allowedMedia.add(norm(out));
+    return { path: out, size: fs.statSync(out).size };
+  }
+  // Inspect the streams (ffmpeg prints them and exits with an error when no output is given).
+  const info = (await runFfmpeg(['-i', src])).err;
+  const dm = info.match(/Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/);
+  const duration = dm ? secs(dm[1], dm[2], dm[3]) : 0;
+  const v = info.match(/Stream #\S+?: Video: (\w+)/);
+  const a = info.match(/Stream #\S+?: Audio: (\w+)/);
+  if (audioOnly ? !a : !v) return { error: 'unreadable' };
+  const copyV = v && v[1] === 'h264' && /yuv420p[^1]/.test(info.slice(v.index, v.index + 200) + ' ');
+  const copyA = a && a[1] === 'aac';
+  const tmp = `${out}.part`;
+  const args = ['-y', '-i', src];
+  if (audioOnly) args.push('-vn', '-map', '0:a:0', ...(copyA ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k']));
+  else {
+    args.push('-map', '0:v:0', '-map', '0:a:0?');
+    args.push(...(copyV ? ['-c:v', 'copy'] : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p']));
+    args.push(...(copyA ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']));
+    args.push('-movflags', '+faststart');
+  }
+  args.push('-f', audioOnly ? 'ipod' : 'mp4', tmp);
+  send(0);
+  const r = await runFfmpeg(args, (line) => {
+    const m = line.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+    if (m && duration > 0) send(Math.min(0.99, secs(m[1], m[2], m[3]) / duration));
+  });
+  if (r.code !== 0 || !fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
+    fs.rmSync(tmp, { force: true });
+    return { error: 'failed' };
+  }
+  await fsp.rename(tmp, out);
+  allowedMedia.add(norm(out));
+  return { path: out, size: fs.statSync(out).size };
+}
+
 /* ----------------------------- project library ----------------------------- */
 
 function libraryRoot() {
@@ -203,6 +327,9 @@ app.whenReady().then(() => {
     if (!Array.isArray(paths)) return;
     for (const p of paths) if (typeof p === 'string' && path.isAbsolute(p) && fs.existsSync(p)) allowedMedia.add(norm(p));
   });
+
+  ipcMain.handle('media:convert', convertMedia);
+  ipcMain.handle('media:save-converted', saveConverted);
 
   ipcMain.handle('media:exists', async (_e, paths) => {
     if (!Array.isArray(paths)) return [];

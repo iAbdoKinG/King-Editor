@@ -5,8 +5,8 @@
  */
 import type { MediaKind } from '../../types/project';
 
-const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|ogv|3gp)$/i;
-const AUDIO_EXT = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|caf|aif|aiff)$/i;
+const VIDEO_EXT = /\.(mp4|m4v|mov|qt|webm|mkv|ogv|3gp|3g2|ts|mts|m2ts|m2t|tod|trp|avi|divx|xvid|flv|f4v|wmv|asf|mpg|mpeg|mpe|m1v|m2v|mpv|vob|mxf|dv|rm|rmvb|nut|y4m|gxf|wtv|dvr-ms|h264|264|h265|265|hevc|ivf|amv|mjpeg|mjpg)$/i;
+const AUDIO_EXT = /\.(mp3|m4a|m4b|aac|wav|ogg|oga|opus|flac|caf|aif|aiff|aifc|wma|ac3|eac3|ec3|dts|amr|awb|ape|mka|mp2|mpa|wv|tta|au|snd|ra|spx|gsm|w64|voc|mid)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|heic|heif)$/i;
 
 export function detectKind(file: File): MediaKind | null {

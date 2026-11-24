@@ -151,3 +151,17 @@ Local build: `npm run build && cd desktop && npm ci && npm run dist:win` (on Win
 - iPad/iPhone Safari: audio unlock on first tap, un-muted playback across clip boundaries, A/V sync, memory with long 4K clips, page suspension/resume, installed-PWA mode and safe areas.
 - Touch gestures on real hardware: long-press menu, pinch zoom, two-finger preview transform, trim on small iPhones, and Apple Pencil hover/precision.
 - H.264/HEVC/AAC files (the CI Chromium build has no proprietary codecs, so the tests use VP9/Opus).
+
+## Universal format import
+
+Files the browser cannot play directly (MPEG-TS, MKV, AVI, FLV, WMV, MPG/VOB,
+MXF, AC3, WMA, …) are converted on the device when imported, to MP4 (H.264/AAC)
+or M4A. Nothing is uploaded and the original file is never changed.
+
+- **Web:** WebCodecs via mediabunny (streams are copied without re-encoding when
+  possible), falling back to FFmpeg compiled to WebAssembly (`@ffmpeg/core`,
+  self-hosted in `/ffmpeg/`, downloaded only when first needed).
+- **Windows app:** the bundled native FFmpeg (`ffmpeg-static`); converted copies
+  are kept in `Documents/Qissa/Converted` and reused.
+
+FFmpeg is licensed under the LGPL/GPL; see https://ffmpeg.org/legal.html.

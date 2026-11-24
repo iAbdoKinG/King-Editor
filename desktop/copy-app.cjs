@@ -11,4 +11,6 @@ fs.rmSync(dst, { recursive: true, force: true });
 fs.cpSync(src, dst, { recursive: true });
 // Browser-only files are not needed inside the desktop app.
 for (const f of ['sw.js', '_headers']) fs.rmSync(path.join(dst, f), { force: true });
+// The desktop app converts with native FFmpeg; the WebAssembly build is not needed.
+fs.rmSync(path.join(dst, 'ffmpeg'), { recursive: true, force: true });
 console.log('Copied web app to', dst);

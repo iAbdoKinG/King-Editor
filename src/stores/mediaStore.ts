@@ -9,6 +9,7 @@ import { uid } from '../utils/id';
 import { detectKind, makeThumbnail, probe } from '../features/media/probe';
 import { requestWaveform } from '../features/media/waveform';
 import { desktop, mediaUrl } from '../desktop/bridge';
+import { conversionMessage, convertInBrowser, needsConversion } from '../features/media/convert';
 
 export type PathEntry = Pick<MediaAsset, 'id' | 'kind' | 'name' | 'size' | 'mime'> & { path: string; exists: boolean };
 
@@ -40,10 +41,62 @@ export const useMediaStore = create<MediaState>((set, get) => {
   const patch = (id: string, p: Partial<MediaAsset>) =>
     set((s) => (s.assets[id] ? { assets: { ...s.assets, [id]: { ...s.assets[id], ...p } } } : s));
 
-  /** Probe metadata, then thumbnail and waveform in the background. */
-  async function analyze(id: string): Promise<void> {
+  /**
+   * Make an asset playable: files the browser cannot play directly (TS, MKV,
+   * AVI, WMV, …) are converted on this device to MP4/M4A first. Desktop uses
+   * the bundled native FFmpeg; the browser uses WebCodecs or FFmpeg.wasm.
+   */
+  async function convert(id: string): Promise<boolean> {
     const a = get().assets[id];
+    if (!a || a.kind === 'image') return false;
+    patch(id, { status: 'converting', progress: 0, error: undefined });
+    const onProgress = (p: number) => {
+      const cur = get().assets[id];
+      if (cur && cur.status === 'converting' && Math.abs((cur.progress ?? 0) - p) >= 0.01) patch(id, { progress: p });
+    };
+    try {
+      if (a.path && desktop?.convertMedia) {
+        let r = await desktop.convertMedia(a.path, a.kind, onProgress);
+        const original = fileStore.get(id);
+        if (!r.path && original && desktop.saveConverted) {
+          // Native FFmpeg could not read it: convert in the page, keep the result on disk.
+          onProgress(0);
+          const out = await convertInBrowser(original, a.kind, onProgress);
+          r = await desktop.saveConverted(a.path, a.kind, await out.arrayBuffer());
+        }
+        if (!r.path) throw new Error(r.error ?? 'failed');
+        if (!get().assets[id]) return false;
+        if (a.url.startsWith('blob:')) URL.revokeObjectURL(a.url);
+        fileStore.delete(id); // stream the converted file from disk
+        const name = r.path.split(/[\\/]/).pop() ?? a.name;
+        patch(id, { path: r.path, url: mediaUrl(r.path), size: r.size ?? a.size, mime: a.kind === 'audio' ? 'audio/mp4' : 'video/mp4', name: name.replace(/-[0-9a-f]{10}(\.\w+)$/, '$1'), status: 'loading', progress: undefined });
+        return true;
+      }
+      const file = fileStore.get(id);
+      if (!file) throw new Error('failed');
+      const out = await convertInBrowser(file, a.kind, onProgress);
+      if (!get().assets[id]) return false;
+      if (a.url.startsWith('blob:')) URL.revokeObjectURL(a.url);
+      fileStore.set(id, out);
+      patch(id, { url: URL.createObjectURL(out), name: out.name, size: out.size, mime: out.type, status: 'loading', progress: undefined });
+      return true;
+    } catch (e) {
+      if (get().assets[id]) patch(id, { status: 'error', progress: undefined, error: conversionMessage(e) });
+      return false;
+    }
+  }
+
+  /** Probe metadata, then thumbnail and waveform in the background. */
+  async function analyze(id: string, converted = false): Promise<void> {
+    let a = get().assets[id];
     if (!a) return;
+    const file = fileStore.get(id);
+    if (!converted && a.kind !== 'image' && needsConversion(file ?? ({ name: a.path ?? a.name } as File), a.kind)) {
+      if (!(await convert(id))) return;
+      converted = true;
+      a = get().assets[id];
+      if (!a) return;
+    }
     try {
       const meta = await probe(a.url, a.kind);
       if (!get().assets[id]) return;
@@ -59,6 +112,9 @@ export const useMediaStore = create<MediaState>((set, get) => {
       patch(id, { thumbUrl });
     } catch (e) {
       if (!get().assets[id]) return;
+      // A supported container with a codec this browser cannot play (e.g. HEVC, ProRes): convert once.
+      if (!converted && a.kind !== 'image' && (await convert(id))) return analyze(id, true);
+      if (!get().assets[id] || get().assets[id].status === 'error') return;
       const msg = (e as Error).message === 'timeout' ? 'Timed out reading this file.' : 'This browser cannot decode this file format.';
       patch(id, { status: 'error', error: msg });
     }
@@ -98,7 +154,7 @@ export const useMediaStore = create<MediaState>((set, get) => {
         set((s) => ({ assets: { ...s.assets, [id]: asset }, order: [...s.order, id] }));
         added.push(id);
       }
-      await Promise.all(added.map(analyze));
+      await Promise.all(added.map((id) => analyze(id)));
       return { added, rejected };
     },
 

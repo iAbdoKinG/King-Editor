@@ -8,6 +8,8 @@ export interface DesktopBridge {
   pathForFile(file: File): string | null;
   registerMedia(paths: string[]): Promise<void>;
   mediaExists(paths: string[]): Promise<boolean[]>;
+  saveConverted?(path: string, kind: 'video' | 'audio', data: ArrayBuffer): Promise<{ path?: string; size?: number; error?: string }>;
+  convertMedia?(path: string, kind: 'video' | 'audio', onProgress: (p: number) => void): Promise<{ path?: string; size?: number; error?: string }>;
   saveProject(text: string, suggestedName: string, path?: string | null): Promise<string | null>;
   openProject(): Promise<{ path: string; text: string } | null>;
   hasPendingProject(): Promise<boolean>;

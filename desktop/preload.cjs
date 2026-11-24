@@ -16,7 +16,17 @@ contextBridge.exposeInMainWorld('kingDesktop', {
     }
   },
   registerMedia: (paths) => ipcRenderer.invoke('media:register', paths),
+  saveConverted: (path, kind, data) => ipcRenderer.invoke('media:save-converted', { path, kind, data }),
   mediaExists: (paths) => ipcRenderer.invoke('media:exists', paths),
+  /** Convert a picked file the app cannot play to MP4/M4A with the bundled FFmpeg. */
+  convertMedia: (path, kind, onProgress) => {
+    const jobId = Math.random().toString(36).slice(2);
+    const fn = (_e, m) => {
+      if (m && m.jobId === jobId && typeof onProgress === 'function') onProgress(m.progress);
+    };
+    ipcRenderer.on('media:convert-progress', fn);
+    return ipcRenderer.invoke('media:convert', { jobId, path, kind }).finally(() => ipcRenderer.removeListener('media:convert-progress', fn));
+  },
   saveProject: (text, suggestedName, path) => ipcRenderer.invoke('project:save', { text, suggestedName, path }),
   openProject: () => ipcRenderer.invoke('project:open'),
   hasPendingProject: () => ipcRenderer.invoke('project:pending'),

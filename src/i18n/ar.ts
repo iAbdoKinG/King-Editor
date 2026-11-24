@@ -552,4 +552,8 @@ export const AR: Record<string, string> = {
   'Offset X': 'إزاحة X',
   'Offset Y': 'إزاحة Y',
   Softness: 'النعومة',
+  'Converting…': 'جاري التحويل…',
+  'This file is too large to convert in the browser. Use the Windows app.': 'الملف كبير جداً للتحويل في المتصفح. استخدم تطبيق ويندوز.',
+  'The converter could not be loaded. Check your connection and try again.': 'تعذّر تحميل المحوّل. تحقّق من الاتصال وحاول مجدداً.',
+  'This file could not be converted.': 'تعذّر تحويل هذا الملف.',
 };
