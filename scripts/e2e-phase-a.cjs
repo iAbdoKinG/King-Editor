@@ -164,10 +164,11 @@ async function pngDiff(page, a, b) {
   const tr = await K((id) => window.__KING__.useProjectStore.getState().project.clips[id].transform, vid);
   check('fill + align top-left', tr.scaleX >= 1 && Math.abs(tr.x) < 2 && Math.abs(tr.y) < 2, JSON.stringify({ s: tr.scaleX, x: tr.x, y: tr.y }));
   await page.getByRole('button', { name: 'Fit' }).click();
-  await page.getByRole('button', { name: 'Slow zoom in' }).click();
-  const kfs = await K((id) => window.__KING__.useProjectStore.getState().project.clips[id].keyframes, vid);
-  check('quick animation creates keyframes', kfs?.scale?.length === 2, JSON.stringify(kfs?.scale));
-  await page.getByRole('button', { name: 'Remove all keyframes' }).click();
+  await page.getByTestId('motion-tab-combo').click();
+  await page.getByTestId('motion-combo-kenBurnsIn').click();
+  const mo = await K((id) => window.__KING__.useProjectStore.getState().project.clips[id], vid);
+  check('quick animation stored as a Combo motion (no keyframes)', mo.motion?.combo?.id === 'kenBurnsIn' && !mo.keyframes?.scale, JSON.stringify(mo.motion));
+  await K((id) => window.__KING__.useProjectStore.getState().apply((p) => ({ ...p, clips: { ...p.clips, [id]: { ...p.clips[id], motion: undefined } } })), vid);
   await page.getByRole('button', { name: 'Reset effects' }).click();
 
   /* ---------- Arabic font ---------- */
@@ -177,7 +178,7 @@ async function pngDiff(page, a, b) {
   await page.locator('[aria-label="Font"]').selectOption('Cairo');
   await page.waitForFunction(() => document.fonts.check('700 48px "Cairo"', 'مرحبا'), null, { timeout: 10000 }).catch(() => {});
   const cairo = await page.evaluate(() => document.fonts.check('700 48px "Cairo"', 'مرحبا'));
-  check('Arabic font loads on demand', cairo);
+  check('Arabic font loads on demand', cairo, cairo ? '' : JSON.stringify(await page.evaluate(() => { const ps = window.__KING__.useProjectStore.getState(); const c = ps.project.clips[ps.selectedClipId]; return { sel: ps.selectedClipId, type: c?.type, font: c?.style?.fontFamily, text: c?.text, fonts: [...document.fonts].filter((f) => /Cairo/.test(f.family)).map((f) => f.status) }; })));
   await page.waitForTimeout(400);
   await page.locator('[data-testid=preview-stage]').screenshot({ path: path.join(outDir, 'arabic-text.png') });
   // The Arabic title must look the same in the GPU preview and the export renderer.

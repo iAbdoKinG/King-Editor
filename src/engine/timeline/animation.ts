@@ -180,3 +180,27 @@ export function splitKeyframes(k: Keyframes | undefined, at: number): [Keyframes
   }
   return [left, right];
 }
+
+/** Move every keyframe at local time `from` to `to` (all properties together). A keyframe already at `to` is replaced. */
+export function moveKeyframeTime<C extends Clip>(clip: C, from: number, to: number): C {
+  if (Math.abs(from - to) < KF_EPS / 2) return clip;
+  let c = clip;
+  for (const p of ANIM_PROPS) {
+    const list = c.keyframes?.[p];
+    const i = keyframeIndexAt(list, from);
+    if (!list || i < 0) continue;
+    const moved = { ...list[i], t: to };
+    const next = list.filter((k, j) => j !== i && Math.abs(k.t - to) >= KF_EPS);
+    next.push(moved);
+    next.sort((a, b) => a.t - b.t);
+    c = withKeyframes(c, p, next);
+  }
+  return c;
+}
+
+/** Delete every keyframe at local time `t`. */
+export function removeKeyframesAt<C extends Clip>(clip: C, t: number): C {
+  let c = clip;
+  for (const p of ANIM_PROPS) if (keyframeIndexAt(c.keyframes?.[p], t) >= 0) c = removeKeyframe(c, p, t);
+  return c;
+}

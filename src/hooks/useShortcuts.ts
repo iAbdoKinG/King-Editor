@@ -10,6 +10,7 @@ import {
   duplicateSelected,
   extractAudio,
   jumpMarker,
+  jumpEdit,
   seekBy,
   splitAtPlayhead,
   stepFrames,
@@ -74,6 +75,12 @@ export function runAction(id: string): boolean {
       break;
     case 'markerNamed':
       window.dispatchEvent(new CustomEvent('king:edit-marker', { detail: addMarkerAtPlayhead() }));
+      break;
+    case 'prevEdit':
+      jumpEdit(-1);
+      break;
+    case 'nextEdit':
+      jumpEdit(1);
       break;
     case 'prevMarker':
       jumpMarker(-1);

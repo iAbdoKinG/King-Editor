@@ -196,3 +196,62 @@
     animation: none;
   }
 }
+
+/* Animation picker glyphs: a tiny "clip" that performs the animation. */
+.motion-glyph {
+  display: block;
+  width: 18px;
+  height: 12px;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0.85;
+  animation: 1.6s ease-out infinite both;
+}
+.mg-out { animation-direction: reverse; animation-timing-function: ease-in; }
+.mg-fade { animation-name: mg-fade; }
+.mg-pop { animation-name: mg-pop; }
+.mg-zoomIn { animation-name: mg-zoomIn; }
+.mg-zoomOut { animation-name: mg-zoomOut; }
+.mg-in.mg-slideLeft, .mg-out.mg-slideRight { animation-name: mg-fromRight; }
+.mg-in.mg-slideRight, .mg-out.mg-slideLeft { animation-name: mg-fromLeft; }
+.mg-in.mg-slideUp, .mg-out.mg-slideDown { animation-name: mg-fromBottom; }
+.mg-in.mg-slideDown, .mg-out.mg-slideUp { animation-name: mg-fromTop; }
+.mg-rise, .mg-sink { animation-name: mg-rise; }
+.mg-spin { animation-name: mg-spin; }
+.mg-swing { animation-name: mg-swing; }
+.mg-blur { animation-name: mg-blur; }
+.mg-bounce { animation-name: mg-bounce; animation-timing-function: linear; }
+.mg-combo { animation-duration: 2.4s; animation-timing-function: ease-in-out; animation-direction: alternate; }
+.mg-kenBurnsIn { animation-name: mg-kb; }
+.mg-kenBurnsOut { animation-name: mg-kb; animation-direction: alternate-reverse; }
+.mg-panLeft { animation-name: mg-panL; }
+.mg-panRight { animation-name: mg-panL; animation-direction: alternate-reverse; }
+.mg-panUp { animation-name: mg-panU; }
+.mg-panDown { animation-name: mg-panU; animation-direction: alternate-reverse; }
+.mg-punch { animation-name: mg-punch; animation-direction: normal; }
+.mg-pulse { animation-name: mg-pulse; animation-duration: 0.8s; }
+.mg-sway { animation-name: mg-sway; }
+.mg-shake { animation-name: mg-shake; animation-duration: 0.3s; animation-timing-function: linear; }
+.mg-float { animation-name: mg-float; }
+@keyframes mg-fade { 0% { opacity: 0; } 60%, 100% { opacity: 0.85; } }
+@keyframes mg-pop { 0% { transform: scale(0.3); opacity: 0; } 40% { transform: scale(1.15); opacity: 0.85; } 60%, 100% { transform: scale(1); } }
+@keyframes mg-zoomIn { 0% { transform: scale(0.2); opacity: 0; } 60%, 100% { transform: scale(1); opacity: 0.85; } }
+@keyframes mg-zoomOut { 0% { transform: scale(1.8); opacity: 0; } 60%, 100% { transform: scale(1); opacity: 0.85; } }
+@keyframes mg-fromRight { 0% { transform: translateX(16px); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-fromLeft { 0% { transform: translateX(-16px); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-fromBottom { 0% { transform: translateY(12px); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-fromTop { 0% { transform: translateY(-12px); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-rise { 0% { transform: translateY(6px); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-spin { 0% { transform: rotate(-180deg) scale(0.3); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-swing { 0% { transform: translateX(-4px) rotate(-25deg); opacity: 0; } 60%, 100% { transform: none; opacity: 0.85; } }
+@keyframes mg-blur { 0% { filter: blur(4px); opacity: 0; } 60%, 100% { filter: none; opacity: 0.85; } }
+@keyframes mg-bounce { 0% { transform: translateY(-12px); } 20% { transform: none; } 30% { transform: translateY(-5px); } 40% { transform: none; } 47% { transform: translateY(-2px); } 54%, 100% { transform: none; } }
+@keyframes mg-kb { from { transform: scale(0.9); } to { transform: scale(1.25); } }
+@keyframes mg-panL { from { transform: translateX(4px) scale(1.1); } to { transform: translateX(-4px) scale(1.1); } }
+@keyframes mg-panU { from { transform: translateY(3px) scale(1.1); } to { transform: translateY(-3px) scale(1.1); } }
+@keyframes mg-punch { 0% { transform: scale(1); } 15% { transform: scale(1.45); } 25%, 100% { transform: scale(1.35); } }
+@keyframes mg-pulse { from { transform: scale(1); } to { transform: scale(1.15); } }
+@keyframes mg-sway { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+@keyframes mg-shake { 0%, 100% { transform: none; } 25% { transform: translate(1.5px, -1px); } 50% { transform: translate(-1px, 1px); } 75% { transform: translate(1px, 1.5px); } }
+@keyframes mg-float { from { transform: translateY(2px) rotate(-2deg); } to { transform: translateY(-2px) rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .motion-glyph { animation: none; } }

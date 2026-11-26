@@ -5,10 +5,11 @@
  */
 import { create } from 'zustand';
 import { t as T } from '../../i18n';
-import type { Easing, Effects, Keyframe, Keyframes, TextStyle, Transition } from '../../types/project';
+import type { Easing, Effects, Keyframe, Keyframes, Motion, TextStyle, Transition } from '../../types/project';
 import type { ThemeColors } from '../../app/theme';
 import { defaultEffects } from '../../engine/timeline/model';
 import { ANIM_PROPS } from '../../engine/timeline/animation';
+import { cleanMotion } from '../../engine/timeline/motion';
 import { TRANSITION_TYPES } from '../../engine/timeline/transitions';
 import { storage } from '../../utils/storage';
 import { uid } from '../../utils/id';
@@ -19,7 +20,8 @@ export interface PresetDataMap {
   effects: Effects;
   textStyle: TextStyle;
   transition: Transition;
-  animation: Keyframes;
+  /** Keyframes plus (optionally) In/Out/Combo motion. */
+  animation: Keyframes & { motion?: Motion };
   theme: ThemeColors;
 }
 
@@ -132,7 +134,11 @@ const CLEAN: { [K in PresetKind]: (d: Record<string, unknown>) => PresetDataMap[
   effects: cleanEffects,
   textStyle: cleanTextStyle,
   transition: cleanTransition,
-  animation: cleanAnimation,
+  animation: (d) => {
+    const motion = cleanMotion(d.motion);
+    const k = cleanAnimation(d);
+    return motion ? { ...k, motion } : k;
+  },
   theme: cleanTheme,
 };
 

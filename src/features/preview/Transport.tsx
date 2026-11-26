@@ -1,3 +1,4 @@
+import { jumpEdit } from '../timeline/actions';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { t as T } from '../../i18n';
 import { Icon } from '../../components/Icon';
@@ -67,6 +68,9 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
             <Icon name="toStart" size={18} />
           </button>
         )}
+        <button className="icon-btn" aria-label={T("Previous edit point")} data-testid="prev-edit" onClick={() => jumpEdit(-1)}>
+          <Icon name="prevEdit" size={18} />
+        </button>
         <button className="icon-btn" aria-label={T("Previous frame")} onClick={() => stepFrames(-1)}>
           <Icon name="stepBack" size={18} />
         </button>
@@ -80,6 +84,9 @@ export function Transport({ compact, onFullscreen }: { compact: boolean; onFulls
         </button>
         <button className="icon-btn" aria-label={T("Next frame")} onClick={() => stepFrames(1)}>
           <Icon name="stepFwd" size={18} />
+        </button>
+        <button className="icon-btn" aria-label={T("Next edit point")} data-testid="next-edit" onClick={() => jumpEdit(1)}>
+          <Icon name="nextEdit" size={18} />
         </button>
         {!compact && (
           <button className="icon-btn" aria-label={T("Forward 1 second")} onClick={() => seekBy(1)}>

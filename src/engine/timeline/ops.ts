@@ -8,6 +8,7 @@ import { uid } from '../../utils/id';
 import { clamp, quantize } from '../../utils/time';
 import { clipEnd, clipsOnTrack, createTrack, maxClipDuration } from './model';
 import { shiftKeyframes, splitKeyframes } from './animation';
+import { splitMotion } from './motion';
 
 const EPS = 1e-6;
 
@@ -118,23 +119,25 @@ export function splitClip(project: Project, clipId: string, t: number): [Project
   const rightDur = clipEnd(clip) - at;
   const rightId = uid('clp');
   const [kl, kr] = splitKeyframes(clip.keyframes, leftDur);
+  const [ml, mr] = splitMotion(clip.motion);
   let left: Clip;
   let right: Clip;
   if (clip.type === 'media') {
-    left = { ...clip, duration: leftDur, keyframes: kl, audio: { ...clip.audio, fadeOut: 0 } };
+    left = { ...clip, duration: leftDur, keyframes: kl, motion: ml, audio: { ...clip.audio, fadeOut: 0 } };
     right = {
       ...clip,
       id: rightId,
       start: at,
       duration: rightDur,
       keyframes: kr,
+      motion: mr,
       transitionIn: undefined,
       in: clip.in + leftDur * clip.speed,
       audio: { ...clip.audio, fadeIn: 0 },
     };
   } else {
-    left = { ...clip, duration: leftDur, keyframes: kl };
-    right = { ...clip, id: rightId, start: at, duration: rightDur, keyframes: kr, transitionIn: undefined };
+    left = { ...clip, duration: leftDur, keyframes: kl, motion: ml };
+    right = { ...clip, id: rightId, start: at, duration: rightDur, keyframes: kr, motion: mr, transitionIn: undefined };
   }
   return [{ ...project, clips: { ...project.clips, [left.id]: left, [right.id]: right } }, rightId];
 }
@@ -287,4 +290,34 @@ export function updateMarker(project: Project, id: string, patch: Partial<Marker
 
 export function removeMarker(project: Project, id: string): Project {
   return { ...project, markers: (project.markers ?? []).filter((m) => m.id !== id) };
+}
+
+/**
+ * Points the playhead is magnetic to: timeline start/end, every clip's start
+ * and end, markers, and the keyframes of the selected clip.
+ */
+export function playheadSnapPoints(project: Project, selectedClipId: string | null): number[] {
+  const out = [0, ...(project.markers ?? []).map((m) => m.t)];
+  let end = 0;
+  for (const id in project.clips) {
+    const c = project.clips[id];
+    out.push(c.start, clipEnd(c));
+    end = Math.max(end, clipEnd(c));
+  }
+  out.push(end);
+  const sel = selectedClipId ? project.clips[selectedClipId] : null;
+  if (sel?.keyframes) for (const list of Object.values(sel.keyframes)) for (const k of list ?? []) if (k.t >= 0 && k.t <= sel.duration) out.push(sel.start + k.t);
+  return out;
+}
+
+/** Nearest edit point strictly before/after `t` (clip edges and markers). */
+export function adjacentEditPoint(project: Project, t: number, dir: -1 | 1): number | null {
+  const pts = playheadSnapPoints(project, null);
+  let best: number | null = null;
+  for (const p of pts) {
+    if (dir > 0 ? p > t + 1e-3 : p < t - 1e-3) {
+      if (best === null || (dir > 0 ? p < best : p > best)) best = p;
+    }
+  }
+  return best;
 }

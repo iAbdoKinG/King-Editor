@@ -11,13 +11,14 @@ import type { AnimProp, Clip, Project, Transform } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
 import { visibleLayersAt } from '../../engine/rendering/compositor';
 import { resolveTransform, setAnimatedValue } from '../../engine/timeline/animation';
-import { boxCorners, clipBox, hitBox, type Point } from '../../engine/rendering/geometry';
+import { boxCorners, boxPoint, clipBox, hitBox, type ClipBox, type Point } from '../../engine/rendering/geometry';
+import { motionDef, setMotion } from '../../engine/timeline/motion';
 import { frameSize } from '../../engine/timeline/model';
 import { updateClip } from '../../engine/timeline/ops';
 import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
 
-type Mode = 'move' | 'scale' | 'rotate' | 'pinch';
+type Mode = 'move' | 'scale' | 'rotate' | 'pinch' | 'focus';
 
 interface Gesture {
   mode: Mode;
@@ -41,6 +42,7 @@ export function TransformOverlay({ width, height }: { width: number; height: num
   const rotLineRef = useRef<SVGLineElement>(null);
   const rotHitRef = useRef<SVGCircleElement>(null);
   const scaleHitRef = useRef<SVGCircleElement>(null);
+  const focusRef = useRef<SVGGElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const pointers = useRef(new Map<number, Point>());
   const sizeRef = useRef({ width, height });
@@ -104,6 +106,14 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       rotLineRef.current!.setAttribute('y1', `${my}`);
       rotLineRef.current!.setAttribute('x2', `${rx}`);
       rotLineRef.current!.setAttribute('y2', `${ry}`);
+      // Zoom/pan focus point of a Combo animation.
+      const combo = clip!.motion?.combo;
+      const fg = focusRef.current!;
+      if (combo && motionDef('combo', combo.id)?.focus) {
+        const f = boxPoint(box, combo.focusX ?? 0.5, combo.focusY ?? 0.5);
+        fg.setAttribute('transform', `translate(${f.x * k},${f.y * kh})`);
+        fg.style.display = '';
+      } else fg.style.display = 'none';
     };
     const offFrame = engine.onFrame(update);
     const offSel = useProjectStore.subscribe(update);
@@ -154,7 +164,7 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       return;
     }
 
-    const handle = (e.target as Element).getAttribute?.('data-handle') as 'scale' | 'rotate' | null;
+    const handle = (e.target as Element).getAttribute?.('data-handle') as 'scale' | 'rotate' | 'focus' | null;
     let clip = activeSelected(ps.project, t);
     if (!handle) {
       const box = clip ? clipBox(clip, assets, W, H, resolveTransform(clip, t - clip.start)) : null;
@@ -213,6 +223,16 @@ export function TransformOverlay({ width, height }: { width: number; height: num
       if (!g.moved) {
         g.moved = true;
         ps.begin();
+      }
+      if (g.mode === 'focus') {
+        const c = ps.project.clips[g.clipId];
+        const combo = c?.motion?.combo;
+        const b = c && clipBox(c, useMediaStore.getState().assets, W, frameSize(ps.project.settings).height, g.orig);
+        if (combo && b) {
+          const [fx, fy] = boxFraction(b, p);
+          ps.apply((proj) => updateClip(proj, g.clipId, (cl) => setMotion(cl, 'combo', { ...combo, focusX: fx, focusY: fy })), { commit: false });
+        }
+        return;
       }
       if (g.mode === 'move') {
         let x = o.x + (p.x - g.start.x);
@@ -279,9 +299,27 @@ export function TransformOverlay({ width, height }: { width: number; height: num
         {/* Larger invisible hit areas for touch. */}
         <circle ref={rotHitRef} r={22} fill="transparent" data-handle="rotate" style={{ cursor: 'grab' }} />
         <circle ref={scaleHitRef} r={22} fill="transparent" data-handle="scale" style={{ cursor: 'nwse-resize' }} />
+        <g ref={focusRef} style={{ display: 'none' }} data-testid="focus-handle">
+          <circle r={9} fill="none" stroke="#fff" strokeWidth={2} style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,.8))' }} pointerEvents="none" />
+          <path d="M-15 0h9M6 0h9M0 -15v9M0 6v9" stroke="#fff" strokeWidth={2} style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,.8))' }} pointerEvents="none" />
+          <circle r={3} style={{ fill: 'var(--color-accent)' }} pointerEvents="none" />
+          <circle r={22} fill="transparent" data-handle="focus" style={{ cursor: 'move' }} />
+        </g>
       </svg>
     </div>
   );
+}
+
+/** Inverse of boxPoint: project point → fractions of the clip box, clamped to 0..1. */
+function boxFraction(b: ClipBox, p: Point): [number, number] {
+  const dx = p.x - b.cx;
+  const dy = p.y - b.cy;
+  const cos = Math.cos(-b.rot);
+  const sin = Math.sin(-b.rot);
+  const lx = (dx * cos - dy * sin) / (b.w * (b.sx || 1e-6));
+  const ly = (dx * sin + dy * cos) / (b.h * (b.sy || 1e-6));
+  const c = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+  return [c(lx + b.ax), c(ly + b.ay)];
 }
 
 function clampScale(v: number): number {

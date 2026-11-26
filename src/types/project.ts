@@ -97,10 +97,30 @@ export type BlendMode =
   | 'exclusion';
 
 export interface AudioProps {
-  volume: number; // 1 = unity, up to 2
+  volume: number; // 1 = unity, up to 4 (+12 dB)
   pan: number; // -1..1
   fadeIn: number;
   fadeOut: number;
+  /** Equalizer and effects (see engine/audio/audioFx.ts). */
+  fx?: AudioFx;
+}
+
+export interface AudioFx {
+  /** Preset the settings came from (for the UI). */
+  preset?: string;
+  /** Shelf/peak gains in dB. */
+  low: number;
+  mid: number;
+  high: number;
+  /** Cut frequencies in Hz (0 = off). */
+  highpass: number;
+  lowpass: number;
+  /** 0..1 */
+  compressor: number;
+  echo: number;
+  /** Seconds between echoes. */
+  echoTime: number;
+  reverb: number;
 }
 
 export interface TextStyle {
@@ -128,6 +148,24 @@ export interface Keyframe {
 
 export type Keyframes = Partial<Record<AnimProp, Keyframe[]>>;
 
+/** One In / Out / Combo animation (see engine/timeline/motion.ts). */
+export interface MotionSlot {
+  id: string;
+  /** Seconds (In/Out). Combo spans the whole clip. */
+  duration: number;
+  /** Strength multiplier (Combo). */
+  amount?: number;
+  /** Zoom/pan origin inside the clip, 0..1 (Combo). */
+  focusX?: number;
+  focusY?: number;
+}
+
+export interface Motion {
+  in?: MotionSlot;
+  out?: MotionSlot;
+  combo?: MotionSlot;
+}
+
 export type TransitionType = 'fade' | 'dissolve' | 'slide' | 'zoom' | 'wipe' | 'iris' | 'cover' | 'flash' | 'blur' | 'spin';
 export type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -147,6 +185,7 @@ interface ClipBase {
   /** Timeline duration. */
   duration: number;
   keyframes?: Keyframes;
+  motion?: Motion;
   transitionIn?: Transition;
 }
 

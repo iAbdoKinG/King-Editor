@@ -62,7 +62,13 @@ export function ensureFont(family: string): Promise<void> {
     p = (async () => {
       await def.load!();
       const sample = def.script === 'arabic' ? 'أبجد abc' : 'abc';
-      await Promise.all([document.fonts.load(`400 48px "${family}"`, sample), document.fonts.load(`700 48px "${family}"`, sample)]).catch(() => undefined);
+      // The stylesheet's @font-face rules can register a moment after the import resolves:
+      // retry until the faces really are loaded (otherwise they would stay unloaded).
+      for (let i = 0; i < 40; i++) {
+        await Promise.all([document.fonts.load(`400 48px "${family}"`, sample), document.fonts.load(`700 48px "${family}"`, sample)]).catch(() => undefined);
+        if (document.fonts.check(`400 48px "${family}"`, sample)) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
       useFontStore.setState((s) => ({ epoch: s.epoch + 1, loaded: { ...s.loaded, [family]: true } }));
     })().catch(() => {
       pending.delete(family);

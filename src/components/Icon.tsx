@@ -5,6 +5,8 @@ const P: Record<string, string> = {
   stepBack: 'M18 6v12l-8-6zM6 6v12',
   stepFwd: 'M6 6v12l8-6zM18 6v12',
   toStart: 'M19 6v12l-9-6zM6 6v12',
+  prevEdit: 'M20 7v10l-7-5zM11 4v16M4 9l3 3-3 3',
+  nextEdit: 'M4 7v10l7-5zM13 4v16M20 9l-3 3 3 3',
   undo: 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
   redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3',
   export: 'M12 15V3M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5',

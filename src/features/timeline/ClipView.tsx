@@ -4,6 +4,7 @@ import type { Clip, MediaAsset, TrackKind } from '../../types/project';
 import { HANDLE_W } from './constants';
 import { keyframeTimes } from '../../engine/timeline/animation';
 import { WaveformView } from './WaveformView';
+import { slotDurations } from '../../engine/timeline/motion';
 
 interface Props {
   clip: Clip;
@@ -30,6 +31,7 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
   const fadeOut = clip.type === 'media' ? clip.audio.fadeOut * pps : 0;
   const showFades = kind === 'audio' || (clip.type === 'media' && asset?.kind === 'video');
   const kfTimes = clip.keyframes ? keyframeTimes(clip).filter((t) => t >= 0 && t <= clip.duration) : [];
+  const { din: motionIn, dout: motionOut } = slotDurations(clip);
 
   return (
     <div
@@ -88,13 +90,32 @@ export const ClipView = memo(function ClipView({ clip, asset, selected, pps, hei
           )}
         </div>
       </div>
-      {kfTimes.map((t) => (
-        <div
-          key={t}
-          className="pointer-events-none absolute bottom-[3px] h-[7px] w-[7px] -translate-x-1/2 rotate-45 bg-text shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"
-          style={{ left: t * pps }}
-        />
-      ))}
+      {motionIn > 0 && (
+        <div className="pointer-events-none absolute left-0 top-0 h-[3px] rounded-tl-[6px] bg-gradient-to-r from-white/90 to-white/20" style={{ width: motionIn * pps }} data-testid="motion-in-band" />
+      )}
+      {motionOut > 0 && (
+        <div className="pointer-events-none absolute right-0 top-0 h-[3px] rounded-tr-[6px] bg-gradient-to-l from-white/90 to-white/20" style={{ width: motionOut * pps }} data-testid="motion-out-band" />
+      )}
+      {kfTimes.map((t) =>
+        selected ? (
+          // Selected clip: keyframes can be dragged in time (or tapped to jump to them).
+          <div
+            key={t}
+            data-kf={t}
+            aria-label={T('Keyframe')}
+            className="absolute bottom-0 flex h-[18px] w-[18px] -translate-x-1/2 cursor-ew-resize items-center justify-center"
+            style={{ left: t * pps, touchAction: 'none', zIndex: 4 }}
+          >
+            <div className="h-[9px] w-[9px] rotate-45 bg-accent shadow-[0_0_0_1.5px_rgba(0,0,0,0.6)]" />
+          </div>
+        ) : (
+          <div
+            key={t}
+            className="pointer-events-none absolute bottom-[3px] h-[7px] w-[7px] -translate-x-1/2 rotate-45 bg-text shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"
+            style={{ left: t * pps }}
+          />
+        ),
+      )}
       <div
         className={`absolute inset-0 rounded-[6px] pointer-events-none ${
           selected ? 'ring-2 ring-accent' : 'ring-1 ring-black/25'

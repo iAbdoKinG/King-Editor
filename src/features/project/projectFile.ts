@@ -4,6 +4,8 @@
  * normalizes every field, so a damaged or hand-edited file cannot put the
  * editor into an invalid state.
  */
+import { cleanMotion } from '../../engine/timeline/motion';
+import { cleanAudioFx } from '../../engine/audio/audioFx';
 import type { AspectPreset, AudioProps, Clip, Marker, MediaAsset, MediaKind, Project, Track, TrackKind, Transform } from '../../types/project';
 import { clampDimension, defaultAudio, defaultSettings, defaultTransform } from '../../engine/timeline/model';
 import { cleanAnimation, cleanEffects, cleanTextStyle, cleanTransition } from '../presets/presets';
@@ -77,7 +79,8 @@ function cleanTransform(v: unknown): Transform {
 function cleanAudio(v: unknown): AudioProps {
   const d = defaultAudio();
   if (!isObj(v)) return d;
-  return { volume: num(v.volume, 0, 2, 1), pan: num(v.pan, -1, 1, 0), fadeIn: num(v.fadeIn, 0, 3600, 0), fadeOut: num(v.fadeOut, 0, 3600, 0) };
+  const fx = cleanAudioFx(v.fx);
+  return { volume: num(v.volume, 0, 4, 1), pan: num(v.pan, -1, 1, 0), fadeIn: num(v.fadeIn, 0, 3600, 0), fadeOut: num(v.fadeOut, 0, 3600, 0), ...(fx ? { fx } : {}) };
 }
 
 function cleanClip(v: unknown, tracks: Map<string, Track>, assetIds: Set<string>): Clip | null {
@@ -91,6 +94,7 @@ function cleanClip(v: unknown, tracks: Map<string, Track>, assetIds: Set<string>
     start: num(v.start, 0, 864000, 0),
     duration: num(v.duration, 1 / 240, 864000, 1),
     keyframes: isObj(v.keyframes) ? cleanAnimation(v.keyframes) : undefined,
+    motion: cleanMotion(v.motion),
     transitionIn: isObj(v.transitionIn) ? cleanTransition(v.transitionIn) : undefined,
     transform: cleanTransform(v.transform),
     effects: cleanEffects(isObj(v.effects) ? v.effects : {}),

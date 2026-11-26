@@ -24,6 +24,8 @@ export const ACTIONS: ShortcutAction[] = [
   { id: 'nextFrame', label: 'Next frame', group: 'Playback', keys: 'ArrowRight' },
   { id: 'back1s', label: 'Back 1 second', group: 'Playback', keys: 'Shift+ArrowLeft' },
   { id: 'fwd1s', label: 'Forward 1 second', group: 'Playback', keys: 'Shift+ArrowRight' },
+  { id: 'prevEdit', label: 'Previous edit point', group: 'Playback', keys: 'ArrowUp' },
+  { id: 'nextEdit', label: 'Next edit point', group: 'Playback', keys: 'ArrowDown' },
   { id: 'toStart', label: 'Go to start', group: 'Playback', keys: 'Home' },
   { id: 'toEnd', label: 'Go to end', group: 'Playback', keys: 'End' },
   { id: 'split', label: 'Split at playhead', group: 'Editing', keys: 'KeyS', alt: ['Mod+KeyB'] },

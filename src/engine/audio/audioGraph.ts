@@ -4,12 +4,19 @@
  * after a user gesture on iOS Safari, so `unlock()` must be called from a
  * gesture handler.
  */
+import type { AudioFx } from '../../types/project';
+import { createFxChain, fxActive, type FxChain } from './audioFx';
+
 type Ctor = typeof AudioContext;
 
 export interface ChannelNodes {
   source: MediaElementAudioSourceNode;
   gain: GainNode;
   pan: StereoPannerNode | null;
+  /** Effects chain, created the first time an effect is used on this element. */
+  fx?: FxChain;
+  fxOn?: boolean;
+  fxRef?: AudioFx;
 }
 
 class AudioGraph {
@@ -92,6 +99,29 @@ class AudioGraph {
       g.setTargetAtTime(value, t, 0.012);
     }
     if (nodes.pan && Math.abs(nodes.pan.pan.value - pan) > 1e-3) nodes.pan.pan.setTargetAtTime(pan, t, 0.012);
+  }
+
+  /** Route the channel through its effects chain (gain → fx → pan) or bypass it. */
+  setFx(nodes: ChannelNodes, fx: AudioFx | undefined): void {
+    if (!this.ctx || !this.master) return;
+    const after: AudioNode = nodes.pan ?? this.master;
+    const on = fxActive(fx);
+    if (on && !nodes.fx) {
+      nodes.fx = createFxChain(this.ctx);
+    }
+    if (on !== !!nodes.fxOn) {
+      nodes.gain.disconnect();
+      if (on) {
+        nodes.gain.connect(nodes.fx!.input);
+        nodes.fx!.output.connect(after);
+      } else {
+        nodes.fx?.output.disconnect();
+        nodes.gain.connect(after);
+      }
+      nodes.fxOn = on;
+    }
+    if (on && nodes.fxRef !== fx) nodes.fx!.update(fx);
+    nodes.fxRef = on ? fx : undefined;
   }
 
   /** Optional tap for export: a MediaStream of the master bus. */

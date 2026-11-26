@@ -16,7 +16,8 @@ import { t as T } from '../../i18n';
 import type { Clip, Track } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
 import { clipEnd, projectDuration } from '../../engine/timeline/model';
-import { moveClip, snapCandidates, snapTime, trimClip } from '../../engine/timeline/ops';
+import { moveClip, playheadSnapPoints, snapCandidates, snapTime, trimClip, updateClip } from '../../engine/timeline/ops';
+import { moveKeyframeTime } from '../../engine/timeline/animation';
 import { useMediaStore } from '../../stores/mediaStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { MAX_PX_PER_SEC, MIN_PX_PER_SEC, useUIStore } from '../../stores/uiStore';
@@ -24,12 +25,12 @@ import { clamp } from '../../utils/time';
 import { addAssetToTimeline, addTransition } from './actions';
 import { effectiveTransition, prevAdjacent } from '../../engine/timeline/transitions';
 import { ClipView } from './ClipView';
-import { ASSET_DRAG_TYPE, DRAG_SLOP, HEADER_W, HEADER_W_COMPACT, LONG_PRESS_MS, RULER_H, SNAP_PX, TRACK_H, TRACK_H_COMPACT } from './constants';
+import { ASSET_DRAG_TYPE, DRAG_SLOP, HEADER_W, HEADER_W_COMPACT, LONG_PRESS_MS, RULER_H, SNAP_PX, PLAYHEAD_SNAP_PX, EDGE_TAP_PX, TRACK_H, TRACK_H_COMPACT } from './constants';
 import { Ruler } from './Ruler';
 import { MarkerPopover } from './MarkerPopover';
 import { TrackHeader } from './TrackHeader';
 
-type Mode = 'pending-clip' | 'pending-empty' | 'pending-transition' | 'move' | 'trim-start' | 'trim-end' | 'scrub' | 'none';
+type Mode = 'pending-clip' | 'pending-empty' | 'pending-transition' | 'pending-kf' | 'move' | 'trim-start' | 'trim-end' | 'kf' | 'scrub' | 'none';
 
 interface DragState {
   pointerId: number;
@@ -44,6 +45,8 @@ interface DragState {
   candidates: number[];
   wasSelected: boolean;
   longPress: number;
+  /** Keyframe being dragged (clip-local time). */
+  kfFrom?: number;
 }
 
 interface LaneLayout {
@@ -63,6 +66,7 @@ export function Timeline({ compact }: { compact: boolean }) {
   const headersRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const snapRef = useRef<HTMLDivElement>(null);
+  const lastMagnet = useRef<number | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const pointers = useRef(new Set<number>());
   const lastTap = useRef({ id: '', at: 0 });
@@ -268,7 +272,7 @@ export function Timeline({ compact }: { compact: boolean }) {
     const d = dragRef.current;
     if (!d) return;
     clearTimeout(d.longPress);
-    if (d.mode === 'move' || d.mode === 'trim-start' || d.mode === 'trim-end') useProjectStore.getState().cancel();
+    if (d.mode === 'move' || d.mode === 'trim-start' || d.mode === 'trim-end' || d.mode === 'kf') useProjectStore.getState().cancel();
     dragRef.current = null;
     showSnap(null);
   }
@@ -284,6 +288,20 @@ export function Timeline({ compact }: { compact: boolean }) {
     const db = b.snapped === null ? Infinity : Math.abs(b.snapped - (t + extraEdge));
     if (da === Infinity && db === Infinity) return { t, line: null };
     return da <= db ? { t: a.time, line: a.snapped } : { t: b.time - extraEdge, line: b.snapped };
+  };
+
+  /** Playhead magnet: snaps to clip starts/ends, markers and the selected clip's keyframes. */
+  const magnet = (t: number, line = false) => {
+    if (!useUIStore.getState().snapping) {
+      if (line) showSnap(null);
+      return t;
+    }
+    const ps = useProjectStore.getState();
+    const r = snapTime(t, playheadSnapPoints(ps.project, ps.selectedClipId), PLAYHEAD_SNAP_PX / ppsRef.current);
+    if (line) showSnap(r.snapped);
+    if (r.snapped !== null && r.snapped !== lastMagnet.current) navigator.vibrate?.(4);
+    lastMagnet.current = r.snapped;
+    return r.time;
   };
 
   const startEdit = (d: DragState, mode: Mode, target: Element) => {
@@ -347,6 +365,13 @@ export function Timeline({ compact }: { compact: boolean }) {
     };
     dragRef.current = d;
 
+    const kfEl = target.closest('[data-kf]') as HTMLElement | null;
+    if (kfEl && clip && d.wasSelected) {
+      d.mode = 'pending-kf';
+      d.kfFrom = Number(kfEl.dataset.kf);
+      e.preventDefault();
+      return;
+    }
     if (handle && clip) {
       const edge = handle.dataset.handle === 'start' ? 'trim-start' : 'trim-end';
       d.grabOffset = (edge === 'trim-start' ? clip.start : clipEnd(clip)) - d.t0;
@@ -384,6 +409,9 @@ export function Timeline({ compact }: { compact: boolean }) {
         clearTimeout(d.longPress);
         d.mode = 'none'; // native scroll takes over
       }
+    } else if (d.mode === 'pending-kf' && far) {
+      startEdit(d, 'kf', e.currentTarget);
+      d.candidates = playheadSnapPoints(useProjectStore.getState().project, null).concat(engine.clock.now());
     } else if (d.mode === 'pending-transition' && far) {
       d.mode = 'none';
     } else if (d.mode === 'pending-empty' && far) {
@@ -414,8 +442,16 @@ export function Timeline({ compact }: { compact: boolean }) {
       const c = next.clips[d.clipId];
       if (c && !engine.clock.playing)
         engine.seek(edge === 'start' ? c.start : Math.max(c.start, clipEnd(c) - 1 / next.settings.fps));
+    } else if (d.mode === 'kf' && base && d.clipId && d.kfFrom !== undefined) {
+      const clip = base.clips[d.clipId];
+      if (!clip) return;
+      const s = snap(clip.start + d.kfFrom + dx / pps);
+      showSnap(s.line);
+      const to = Math.min(clip.duration, Math.max(0, s.t - clip.start));
+      ps.apply(() => updateClip(base, d.clipId!, (c) => moveKeyframeTime(c, d.kfFrom!, to)), { commit: false });
+      if (!engine.clock.playing) engine.seek(clip.start + Math.min(to, clip.duration - 1e-3));
     } else if (d.mode === 'scrub') {
-      engine.seek(timeAt(e.clientX));
+      engine.seek(magnet(timeAt(e.clientX), true));
     }
   };
 
@@ -427,15 +463,30 @@ export function Timeline({ compact }: { compact: boolean }) {
     dragRef.current = null;
     showSnap(null);
     const ps = useProjectStore.getState();
-    if (d.mode === 'move' || d.mode === 'trim-start' || d.mode === 'trim-end') {
+    if (d.mode === 'move' || d.mode === 'trim-start' || d.mode === 'trim-end' || d.mode === 'kf') {
       if (cancelled) ps.cancel();
       else ps.end();
+      // A tap (no drag) on a trim handle puts the playhead exactly on that edge.
+      const tapped = Math.hypot(e.clientX - d.x0, e.clientY - d.y0) <= DRAG_SLOP;
+      const c = d.clipId ? ps.project.clips[d.clipId] : null;
+      if (!cancelled && tapped && c && (d.mode === 'trim-start' || d.mode === 'trim-end'))
+        engine.seek(d.mode === 'trim-start' ? c.start : Math.max(c.start, clipEnd(c) - 1 / ps.project.settings.fps));
       return;
     }
     if (cancelled) return;
     if (d.mode === 'pending-transition' && d.clipId) addTransition(d.clipId);
-    else if (d.mode === 'pending-clip' && d.clipId) {
+    else if (d.mode === 'pending-kf' && d.clipId && d.kfFrom !== undefined) {
+      const c = ps.project.clips[d.clipId];
+      if (c) engine.seek(c.start + Math.min(d.kfFrom, c.duration - 1e-3));
+    } else if (d.mode === 'pending-clip' && d.clipId) {
       ps.select(d.clipId);
+      // Tapping near a clip's start or end puts the playhead exactly on that edge.
+      const c = ps.project.clips[d.clipId];
+      if (c && useUIStore.getState().snapping) {
+        const edgeT = EDGE_TAP_PX / ppsRef.current;
+        if (Math.abs(d.t0 - c.start) <= edgeT) engine.seek(c.start);
+        else if (Math.abs(d.t0 - clipEnd(c)) <= edgeT) engine.seek(Math.max(c.start, clipEnd(c) - 1 / ps.project.settings.fps));
+      }
       // Double-tap opens the clip's properties (touch and mouse alike).
       const now = performance.now();
       if (lastTap.current.id === d.clipId && now - lastTap.current.at < 320) {
@@ -447,7 +498,7 @@ export function Timeline({ compact }: { compact: boolean }) {
     }
     else if (d.mode === 'pending-empty') {
       ps.select(null);
-      engine.seek(d.t0);
+      engine.seek(magnet(d.t0));
     }
   };
 
@@ -464,11 +515,13 @@ export function Timeline({ compact }: { compact: boolean }) {
   const onRulerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
-    engine.seek(timeAt(e.clientX));
+    lastMagnet.current = null;
+    engine.seek(magnet(timeAt(e.clientX), true));
   };
   const onRulerMove = (e: React.PointerEvent) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) engine.seek(timeAt(e.clientX));
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) engine.seek(magnet(timeAt(e.clientX), true));
   };
+  const onRulerUp = () => showSnap(null);
 
   /* ---------------- desktop drag & drop from the library ---------------- */
 
@@ -535,6 +588,8 @@ export function Timeline({ compact }: { compact: boolean }) {
             style={{ height: RULER_H, touchAction: 'none', cursor: 'col-resize' }}
             onPointerDown={onRulerDown}
             onPointerMove={onRulerMove}
+            onPointerUp={onRulerUp}
+            onPointerCancel={onRulerUp}
             data-testid="timeline-ruler"
           >
             <div className="sticky left-0 inline-block align-top">

@@ -14,3 +14,7 @@ export const HANDLE_W = typeof window !== 'undefined' && window.matchMedia?.('(p
 
 /** DataTransfer type used when dragging library assets onto the timeline (desktop). */
 export const ASSET_DRAG_TYPE = 'application/x-king-asset';
+/** The playhead is magnetic to clip edges, markers and keyframes within this distance. */
+export const PLAYHEAD_SNAP_PX = 12;
+/** Tapping a clip this close to its start/end moves the playhead onto that edge. */
+export const EDGE_TAP_PX = 18;

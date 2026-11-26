@@ -33,6 +33,7 @@ import {
 } from 'mediabunny';
 import type { Clip, MediaAsset, MediaClip, Project } from '../../types/project';
 import { fadeEnvelope } from '../../engine/audio/audioGraph';
+import { createFxChain, fxActive } from '../../engine/audio/audioFx';
 import { imageFrame, renderFrame, visibleLayersAt, type Frame, type FrameSource } from '../../engine/rendering/compositor';
 import { imageCache } from '../../engine/rendering/imageCache';
 import { exportSize, frameSize, projectDuration, trackGain } from '../../engine/timeline/model';
@@ -358,6 +359,13 @@ async function renderAudio(project: Project, assets: Record<string, MediaAsset>,
     }
     gain.gain.setValueCurveAtTime(curve, s, e - s);
     let last: AudioNode = src.connect(gain);
+    // Same effects chain as the live preview (gain → fx → pan).
+    if (fxActive(c.audio.fx)) {
+      const fx = createFxChain(ctx);
+      fx.update(c.audio.fx);
+      last.connect(fx.input);
+      last = fx.output;
+    }
     if (c.audio.pan !== 0 && typeof ctx.createStereoPanner === 'function') {
       const pan = ctx.createStereoPanner();
       pan.pan.value = c.audio.pan;

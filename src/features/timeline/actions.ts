@@ -6,6 +6,7 @@ import { engine } from '../../engine/playback/engine';
 import { t as T } from '../../i18n';
 import { clipEnd, createMediaClip, createTextClip, trackKindForAsset } from '../../engine/timeline/model';
 import {
+  adjacentEditPoint,
   deleteClips,
   duplicateClip,
   ensureTrackWithRoom,
@@ -193,6 +194,14 @@ export function jumpMarker(dir: -1 | 1): void {
     engine.clock.pause();
     engine.seek(target.t);
   } else toast(markers.length ? 'No more markers in that direction.' : 'No markers yet — press M or tap the flag button.');
+}
+
+/** Move the playhead to the previous/next clip edge or marker. */
+export function jumpEdit(dir: -1 | 1): void {
+  const t = adjacentEditPoint(ps().project, playhead(), dir);
+  if (t === null) return;
+  engine.clock.pause();
+  engine.seek(dir > 0 && t >= engine.clock.duration ? Math.max(0, t - 1 / ps().project.settings.fps) : t);
 }
 
 /** Copy a video clip's sound to its own clip on an audio track and mute the original. */

@@ -16,11 +16,12 @@
 import type { Clip, MediaAsset, Project, TextClip } from '../../types/project';
 import type { MediaPool } from '../playback/mediaPool';
 import { resolveTransform } from '../timeline/animation';
+import { motionAt } from '../timeline/motion';
 import { frameSize } from '../timeline/model';
 import type { Mix } from '../timeline/transitions';
 import { visibleLayersAt } from './compositor';
 import { filterString, shadowFilter, vignetteGradient } from './filters';
-import { clipBox, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD, type ClipBox } from './geometry';
+import { clipBox, layerTransform, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD, type ClipBox } from './geometry';
 import { useFontStore } from '../../features/fonts/fonts';
 import { isRtl } from '../../utils/text';
 
@@ -41,18 +42,6 @@ interface StaticEls extends LayerEls {
 function setStyle(el: HTMLElement, prop: string, value: string): void {
   const s = el.style as unknown as Record<string, string>;
   if (s[prop] !== value) s[prop] = value;
-}
-
-function layerMatrix(k: number, W: number, H: number, mix: Mix, box: ClipBox): string {
-  const m = new DOMMatrix([k, 0, 0, k, 0, 0]);
-  m.translateSelf(W / 2 + mix.dx, H / 2 + mix.dy);
-  if (mix.rotate) m.rotateSelf(mix.rotate);
-  m.scaleSelf(mix.scale, mix.scale);
-  m.translateSelf(-W / 2 + box.cx, -H / 2 + box.cy);
-  m.rotateSelf((box.rot * 180) / Math.PI);
-  m.scaleSelf(box.sx, box.sy);
-  m.translateSelf(-box.w * box.ax, -box.h * box.ay);
-  return `matrix(${m.a},${m.b},${m.c},${m.d},${m.e},${m.f})`;
 }
 
 function clipPath(mix: Mix, cssW: number, cssH: number): string {
@@ -89,7 +78,8 @@ export class DomStage {
       const tr = resolveTransform(clip, t - clip.start);
       const box = clipBox(clip, assets, W, H, tr);
       if (!box) return;
-      const alpha = Math.min(1, tr.opacity) * mix.alpha;
+      const motion = motionAt(clip, t - clip.start, W, H);
+      const alpha = Math.min(1, tr.opacity) * mix.alpha * motion.alpha;
       let els: LayerEls | null = null;
 
       if (clip.type === 'text') {
@@ -126,9 +116,9 @@ export class DomStage {
       setStyle(outer, 'visibility', alpha > 0.001 ? 'visible' : 'hidden');
       setStyle(wrap, 'width', `${box.w}px`);
       setStyle(wrap, 'height', `${box.h}px`);
-      setStyle(wrap, 'transform', layerMatrix(k, W, H, mix, box));
+      setStyle(wrap, 'transform', `matrix(${layerTransform(k, W, H, mix, motion.components, box, true).join(',')})`);
       setStyle(wrap, 'opacity', `${Math.max(0, Math.min(1, alpha))}`);
-      setStyle(wrap, 'filter', filterString(clip.effects, mix, 1));
+      setStyle(wrap, 'filter', filterString(clip.effects, motion.blur ? { blur: mix.blur + motion.blur, brightness: mix.brightness } : mix, 1));
       // Pro effects: corner radius scales with the clip; shadow and blend work on the finished layer.
       setStyle(wrap, 'borderRadius', `${Math.max(0, clip.effects.radius ?? 0)}px`);
       setStyle(outer, 'filter', shadowFilter(clip.effects, k));

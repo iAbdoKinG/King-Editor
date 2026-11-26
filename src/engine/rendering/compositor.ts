@@ -6,9 +6,10 @@
 import type { MediaAsset, Project, TextClip } from '../../types/project';
 import { compositeOp, filterString, shadowFilter } from './filters';
 import { resolveTransform } from '../timeline/animation';
+import { motionAt } from '../timeline/motion';
 import { frameSize } from '../timeline/model';
 import { trackLayersAt, type Layer } from '../timeline/transitions';
-import { clipBox, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD } from './geometry';
+import { clipBox, layerTransform, motionScale, textBoxSize, textFont, TEXT_LINE_HEIGHT, TEXT_PAD } from './geometry';
 import { isRtl } from '../../utils/text';
 import { imageCache } from './imageCache';
 
@@ -147,17 +148,12 @@ function paintLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: R
   const tr = resolveTransform(clip, t - clip.start);
   const box = clipBox(clip, assets, W, H, tr);
   if (!box) return false;
-  const alpha = Math.min(1, tr.opacity) * mix.alpha;
+  const motion = motionAt(clip, t - clip.start, W, H);
+  const alpha = Math.min(1, tr.opacity) * mix.alpha * motion.alpha;
   if (alpha <= 0.001) return false;
 
-  // Transition transform around the frame centre, then the clip transform.
-  ctx.setTransform(k, 0, 0, k, 0, 0);
-  ctx.translate(W / 2 + mix.dx, H / 2 + mix.dy);
-  if (mix.rotate) ctx.rotate((mix.rotate * Math.PI) / 180);
-  ctx.scale(mix.scale, mix.scale);
-  ctx.translate(-W / 2 + box.cx, -H / 2 + box.cy);
-  ctx.rotate(box.rot);
-  ctx.scale(box.sx, box.sy);
+  // Transition (frame centre) · motion (In/Out/Combo) · clip transform — same matrix as the GPU preview.
+  ctx.setTransform(...layerTransform(k, W, H, mix, motion.components, box, false));
   ctx.globalAlpha = alpha;
   const x0 = -box.w * box.ax;
   const y0 = -box.h * box.ay;
@@ -168,7 +164,7 @@ function paintLayer(ctx: CanvasRenderingContext2D, { clip, mix }: Layer, opts: R
     else ctx.rect(x0, y0, box.w, box.h);
     ctx.clip();
   }
-  if (canvasFilterSupported) ctx.filter = filterString(clip.effects, mix, k * mix.scale * Math.abs(box.sx));
+  if (canvasFilterSupported) ctx.filter = filterString(clip.effects, motion.blur ? { blur: mix.blur + motion.blur, brightness: mix.brightness } : mix, k * mix.scale * motionScale(motion.components) * Math.abs(box.sx));
 
   if (clip.type === 'text') drawText(ctx, clip, x0, y0);
   else {

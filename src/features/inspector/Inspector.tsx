@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { t as T } from '../../i18n';
-import type { AnimProp, AspectPreset, Clip, Direction, Easing, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform, Transition, TransitionType } from '../../types/project';
+import type { AnimProp, AspectPreset, AudioFx, Clip, Direction, Easing, MediaAsset, MediaClip, ProjectSettings, TextClip, Transform, Transition, TransitionType } from '../../types/project';
 import { engine } from '../../engine/playback/engine';
 import {
   ANIM_PROPS,
@@ -24,7 +24,8 @@ import { LOOKS, lookEffects } from './looks';
 import { savePreset } from '../presets/PresetsDialog';
 import { BLEND_MODES } from '../presets/presets';
 import { filterString } from '../../engine/rendering/filters';
-import { ANIM_PRESETS, applyAnimPreset } from '../../engine/timeline/animationPresets';
+import { MotionSection } from './MotionSection';
+import { AUDIO_PRESETS, MAX_VOLUME, applyAudioPreset, defaultAudioFx, fxActive, gainToDb } from '../../engine/audio/audioFx';
 import { boxCorners, clipBox } from '../../engine/rendering/geometry';
 import { FONTS, ensureFont } from '../fonts/fonts';
 import { addTransition, extractAudio, removeTransition } from '../timeline/actions';
@@ -281,52 +282,28 @@ const EASINGS: Array<{ value: Easing; label: string }> = [
   { value: 'easeInOut', label: 'Ease In/Out' },
 ];
 
-function QuickAnimations({ clip }: { clip: Clip }) {
-  const patch = usePatch(clip.id);
-  const settings = useProjectStore((s) => s.project.settings);
-  const { width: W, height: H } = frameSize(settings);
-  return (
-    <div className="space-y-1.5 pb-2">
-      {(['in', 'out', 'whole'] as const).map((g) => (
-        <div key={g} className="flex items-center gap-2">
-          <span className="w-[54px] shrink-0 text-[11px] text-muted">{T(g === 'in' ? 'In' : g === 'out' ? 'Out' : 'Whole clip')}</span>
-          <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
-            {ANIM_PRESETS.filter((p) => p.group === g).map((p) => (
-              <button
-                key={p.id}
-                className="h-8 shrink-0 rounded-full border border-line px-3 text-[11.5px] hover:border-accent hover:text-accent"
-                onClick={() => patch((c) => applyAnimPreset(c, p.id, W, H))}
-              >
-                {T(p.name)}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function AnimationSection({ clip }: { clip: Clip }) {
   const pro = useIsPro();
   const patch = usePatch(clip.id);
   const { lt } = useClipTime(clip);
   const times = keyframeTimes(clip);
   if (!times.length || !pro)
-    return (
-      <Section title={T("Animation")}>
-        <QuickAnimations clip={clip} />
+    return pro || times.length ? (
+      <Section title={T('Keyframes')}>
         {pro ? (
           <p className="text-[11px] leading-snug text-muted">
             {T('Tap ◆ next to Position, Scale, Rotation or Opacity to add a keyframe at the playhead. Change the value at another time to animate.')}
           </p>
-        ) : times.length ? (
-          <button className="text-[12px] text-danger" onClick={() => patch((c) => clearAnimation(c))}>
-            {T('Remove all keyframes')}
-          </button>
-        ) : null}
+        ) : (
+          <>
+            <p className="text-[11px] leading-snug text-muted">{T('This clip has keyframes from an earlier version. Moving it at another time can change its motion.')}</p>
+            <button className="text-[12px] text-danger" onClick={() => patch((c) => clearAnimation(c))}>
+              {T('Remove all keyframes')}
+            </button>
+          </>
+        )}
       </Section>
-    );
+    ) : null;
   const atKf = times.find((t) => Math.abs(t - lt) < KF_EPS);
   const prev = [...times].reverse().find((t) => t < lt - KF_EPS);
   const next = times.find((t) => t > lt + KF_EPS);
@@ -337,10 +314,9 @@ function AnimationSection({ clip }: { clip: Clip }) {
   const seekLocal = (t: number) => engine.seek(clip.start + Math.min(Math.max(0, t), clip.duration - 1e-3));
   return (
     <Section
-      title={T('Animation · {n} keyframe(s)', { n: times.length })}
-      action={<SaveButton label={T("Save animation as preset")} onClick={() => savePreset('animation', clip.keyframes ?? {}, T('My animation'))} />}
+      title={T('Keyframes · {n}', { n: times.length })}
+      action={<SaveButton label={T("Save animation as preset")} onClick={() => savePreset('animation', { ...(clip.keyframes ?? {}), motion: clip.motion }, T('My animation'))} />}
     >
-      <QuickAnimations clip={clip} />
       <div className="flex gap-2">
         <button className="field flex-1 text-[12px] disabled:opacity-40" disabled={prev === undefined} onClick={() => seekLocal(prev!)}>
           {T('◂ Previous')}
@@ -549,7 +525,17 @@ function AudioSection({ clip }: { clip: MediaClip }) {
   const maxFade = Math.max(0, clip.duration / 2);
   return (
     <Section title={T("Audio")} action={<ResetButton label={T("Reset audio")} onClick={() => set(defaultAudio(), true)} />}>
-      <SliderField label={T("Volume %")} value={a.volume} min={0} max={2} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ volume: v }, c)} />
+      <SliderField label={T('Volume %')} value={a.volume} min={0} max={MAX_VOLUME} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ volume: v }, c)} />
+      <div className="flex items-center gap-1.5 pb-1">
+        <bdi dir="ltr" className="tnum w-[58px] shrink-0 text-[11px] text-muted" data-testid="volume-db">
+          {gainToDb(a.volume)}
+        </bdi>
+        {[0, 0.5, 1, 2, 4].map((v) => (
+          <button key={v} className={`h-7 flex-1 rounded-md border text-[11px] ${Math.abs(a.volume - v) < 0.005 ? 'border-accent text-text' : 'border-line text-muted hover:text-text'}`} onClick={() => set({ volume: v }, true)}>
+            {v === 0 ? T('Mute') : `${v * 100}%`}
+          </button>
+        ))}
+      </div>
       {pro && <SliderField
         label={T("Pan")}
         value={a.pan}
@@ -572,6 +558,57 @@ function AudioSection({ clip }: { clip: MediaClip }) {
       )}
       <SliderField label={T("Fade in s")} value={a.fadeIn} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeIn: v }, c)} />
       <SliderField label={T("Fade out s")} value={a.fadeOut} min={0} max={maxFade} step={0.05} onChange={(v, c) => set({ fadeOut: v }, c)} />
+    </Section>
+  );
+}
+
+function AudioFxSection({ clip }: { clip: MediaClip }) {
+  const pro = useIsPro();
+  const patch = usePatch(clip.id);
+  const fx = clip.audio.fx ?? defaultAudioFx();
+  const setFx = (next: AudioFx | undefined, commit: boolean) =>
+    patch((c) => {
+      const m = c as MediaClip;
+      const audio = { ...m.audio };
+      if (next && fxActive(next)) audio.fx = next;
+      else delete audio.fx;
+      return { ...m, audio };
+    }, commit);
+  const set = (p: Partial<AudioFx>, commit: boolean) => setFx({ ...fx, ...p, preset: undefined }, commit);
+  const db = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v * 10) / 10}`;
+  const hz = (v: number) => (v <= 0 ? T('Off') : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${Math.round(v)}`);
+  return (
+    <Section title={T('Sound effects')} action={<ResetButton label={T('Reset sound effects')} onClick={() => setFx(undefined, true)} />}>
+      <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1.5" role="listbox" aria-label={T('Sound presets')}>
+        {AUDIO_PRESETS.map((p) => {
+          const on = p.id === 'none' ? !clip.audio.fx : fx.preset === p.id;
+          return (
+            <button
+              key={p.id}
+              role="option"
+              aria-selected={on}
+              data-testid={`audio-preset-${p.id}`}
+              className={`h-8 shrink-0 rounded-full border px-3 text-[11.5px] ${on ? 'border-accent bg-accent/10 text-text' : 'border-line text-muted hover:text-text'}`}
+              onClick={() => setFx(p.id === 'none' ? undefined : applyAudioPreset(p.id), true)}
+            >
+              {T(p.name)}
+            </button>
+          );
+        })}
+      </div>
+      <SliderField label={T('Bass dB')} value={fx.low} min={-15} max={15} step={0.5} display={db} onChange={(v, c) => set({ low: v }, c)} />
+      <SliderField label={T('Mids dB')} value={fx.mid} min={-15} max={15} step={0.5} display={db} onChange={(v, c) => set({ mid: v }, c)} />
+      <SliderField label={T('Treble dB')} value={fx.high} min={-15} max={15} step={0.5} display={db} onChange={(v, c) => set({ high: v }, c)} />
+      <SliderField label={T('Echo %')} value={fx.echo} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ echo: v }, c)} />
+      <SliderField label={T('Reverb %')} value={fx.reverb} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ reverb: v }, c)} />
+      {pro && (
+        <>
+          <SliderField label={T('Low cut Hz')} value={fx.highpass} min={0} max={1000} step={5} display={hz} onChange={(v, c) => set({ highpass: v < 20 ? 0 : v }, c)} />
+          <SliderField label={T('High cut Hz')} value={fx.lowpass || 20000} min={300} max={20000} step={50} display={(v) => (v >= 20000 ? T('Off') : hz(v))} onChange={(v, c) => set({ lowpass: v >= 20000 ? 0 : v }, c)} />
+          <SliderField label={T('Compressor %')} value={fx.compressor} min={0} max={1} step={0.01} display={pct} parse={fromPct} onChange={(v, c) => set({ compressor: v }, c)} />
+          <SliderField label={T('Echo delay s')} value={fx.echoTime} min={0.05} max={1.2} step={0.01} onChange={(v, c) => set({ echoTime: v }, c)} />
+        </>
+      )}
     </Section>
   );
 }
@@ -877,6 +914,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
       <>
         <TextSection clip={clip} />
         <TransformSection key={clip.id} clip={clip} />
+        <MotionSection key={`m${clip.id}`} clip={clip} />
         <AnimationSection clip={clip} />
         <TransitionInSection clip={clip} />
         <EffectsSection clip={clip} asset={asset} />
@@ -888,6 +926,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
     body = (
       <>
         <AudioSection clip={clip} />
+        <AudioFxSection clip={clip} />
         <SpeedSection clip={clip} />
       </>
     );
@@ -895,6 +934,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
     body = (
       <>
         <TransformSection key={clip.id} clip={clip} />
+        <MotionSection key={`m${clip.id}`} clip={clip} />
         <AnimationSection clip={clip} />
         <TransitionInSection clip={clip} />
         {pro && <CropSection clip={clip} />}
@@ -902,6 +942,7 @@ export function Inspector({ onClose }: { onClose?: () => void }) {
         <EffectsSection clip={clip} asset={asset} />
         {pro && <ProEffectsSection clip={clip} />}
         {asset.kind === 'video' && <AudioSection clip={clip} />}
+        {asset.kind === 'video' && <AudioFxSection clip={clip} />}
       </>
     );
 

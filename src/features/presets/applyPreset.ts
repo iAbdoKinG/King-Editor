@@ -46,7 +46,10 @@ export function applyPreset(p: Preset): boolean {
           void ensureFont((p.data as { fontFamily: string }).fontFamily);
           return c.type === 'text' ? { ...c, style: { ...(p.data as typeof c.style) } } : c;
         case 'animation':
-          return { ...c, keyframes: structuredClone(p.data as Clip['keyframes']) } as Clip;
+        {
+          const { motion, ...kf } = structuredClone(p.data as NonNullable<Clip['keyframes']> & { motion?: Clip['motion'] });
+          return { ...c, keyframes: Object.keys(kf).length ? kf : c.keyframes, motion: motion ?? c.motion } as Clip;
+        }
         case 'transition': {
           const prev = prevAdjacent(proj, c);
           const tr = p.data as NonNullable<Clip['transitionIn']>;

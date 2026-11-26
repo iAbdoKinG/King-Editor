@@ -2,6 +2,8 @@
  * Wires stores to the engine and installs global, app-wide behaviour:
  * iOS media unlock on first gesture, page-hide handling, unload warning.
  */
+import { motionAt } from '../engine/timeline/motion';
+import { audioGraph } from '../engine/audio/audioGraph';
 import { engine } from '../engine/playback/engine';
 import { isDesktop } from '../desktop/bridge';
 import { initDesktopProjects } from '../features/project/projectActions';
@@ -118,6 +120,6 @@ export function bootstrap(): void {
 
   // Opt-in debug handle for automated tests (?debug). Exposes nothing by default.
   if (new URLSearchParams(location.search).has('debug')) {
-    (window as unknown as Record<string, unknown>).__KING__ = { engine, useProjectStore, useMediaStore, useUIStore, useLangStore };
+    (window as unknown as Record<string, unknown>).__KING__ = { engine, useProjectStore, useMediaStore, useUIStore, useLangStore, motionAt, audioGraph };
   }
 }

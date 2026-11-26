@@ -356,6 +356,7 @@ export class MediaPool {
         if (nodes) {
           if (el.muted) el.muted = false;
           audioGraph.setGain(nodes, level, clip.audio.pan);
+          audioGraph.setFx(nodes, clip.audio.fx);
         } else {
           el.muted = level === 0;
         }
